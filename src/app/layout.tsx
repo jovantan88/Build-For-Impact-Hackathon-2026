@@ -16,7 +16,7 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-    title: "E-Fridge - Smart Grocery Management",
+    title: "EatLa - Smart Grocery Management",
     description: "Turn your receipts into recipes with AI-powered ingredient tracking",
 };
 
