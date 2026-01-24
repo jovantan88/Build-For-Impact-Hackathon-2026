@@ -66,3 +66,42 @@ export async function POST(
     );
   }
 }
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await params;
+    const { data: ingredient, error } = await supabase
+      .from("ingredients")
+      .select("image_url")
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .single();
+
+    if (error || !ingredient) {
+      return NextResponse.json(
+        { error: "Ingredient not found" },
+        { status: 404 },
+      );
+    }
+
+    return NextResponse.json({ imageUrl: ingredient.image_url || null });
+  } catch (error) {
+    console.error("Image fetch error:", error);
+    return NextResponse.json(
+      { error: "Failed to fetch image" },
+      { status: 500 },
+    );
+  }
+}

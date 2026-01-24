@@ -104,12 +104,12 @@ export default function ExpiryPage() {
     }
   };
 
-  // Quick expiry options (relative to today)
+  // Quick freshness options (relative to today)
   const quickOptions = [
-    { label: "Tomorrow", days: 1 },
-    { label: "3 days", days: 3 },
-    { label: "1 week", days: 7 },
-    { label: "2 weeks", days: 14 },
+    { label: "Use tomorrow", days: 1 },
+    { label: "Use in 3 days", days: 3 },
+    { label: "Use in 1 week", days: 7 },
+    { label: "Use in 2 weeks", days: 14 },
   ];
 
   const getDateFromDays = (days: number) => {
@@ -121,9 +121,9 @@ export default function ExpiryPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Expiry Dates</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Freshness Dates</h1>
         <p className="text-gray-600">
-          Add expiry dates for items that spoil quickly
+          Add dates so we can propose quick actions instead of reminders
         </p>
       </div>
 
@@ -148,7 +148,7 @@ export default function ExpiryPage() {
               {currentItem.name}
             </CardTitle>
             <CardDescription>
-              When does this expire? This helps track freshness.
+              When should you use this? This helps us suggest small actions.
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-6 space-y-6">
@@ -205,7 +205,7 @@ export default function ExpiryPage() {
           </CardHeader>
           <CardContent className="pt-6">
             <div className="text-sm text-gray-600 mb-4">
-              <p>Expiry dates added: {Object.keys(expiryDates).length}</p>
+              <p>Freshness dates added: {Object.keys(expiryDates).length}</p>
               <p>Items skipped: {itemsNeedingExpiry.length - Object.keys(expiryDates).length}</p>
             </div>
             <Button

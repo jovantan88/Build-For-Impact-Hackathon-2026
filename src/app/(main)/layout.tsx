@@ -4,7 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Refrigerator, Upload, ChefHat, LogOut } from "lucide-react";
+import { Refrigerator, Upload, ChefHat, LogOut, Lightbulb } from "lucide-react";
 
 export default function MainLayout({
   children,
@@ -25,6 +25,7 @@ export default function MainLayout({
     { href: "/upload", icon: Upload, label: "Upload" },
     { href: "/fridge", icon: Refrigerator, label: "Fridge" },
     { href: "/recipes", icon: ChefHat, label: "Recipes" },
+    { href: "/insights", icon: Lightbulb, label: "Insights" },
   ];
 
   return (

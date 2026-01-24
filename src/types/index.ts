@@ -37,6 +37,7 @@ export interface Recipe {
   instructions: string[];
   cookTime?: string;
   servings?: number;
+  imageUrl?: string;
 }
 
 export interface FridgeItem {
@@ -49,6 +50,55 @@ export interface FridgeItem {
   imageStatus: "pending" | "generating" | "ready";
   isPantryStaple: boolean;
   daysUntilExpiry?: number;
+}
+
+export interface WasteEvent {
+  id: string;
+  userId: string;
+  ingredientName: string;
+  quantity?: number;
+  unit?: string;
+  eventType: "expired" | "discarded" | "used";
+  originalPurchaseDate?: Date;
+  wasteDate: Date;
+  notes?: string;
+}
+
+export interface PurchaseRecommendation {
+  id: string;
+  userId: string;
+  ingredientName: string;
+  recommendationType: "reduce" | "skip" | "substitute" | "freeze" | "buy_less";
+  wasteFrequency: number; // 0-1, e.g., 0.75 = wasted 3 out of 4 times
+  totalOccurrences: number;
+  wastedOccurrences: number;
+  suggestion: string;
+  substituteWith?: string;
+  isActive: boolean;
+  isDismissed: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface ShoppingInsights {
+  id: string;
+  userId: string;
+  totalWasteEvents: number;
+  mostWastedItems: {
+    name: string;
+    count: number;
+    frequency: number;
+  }[];
+  totalSavingsPotential: number;
+  insightSummary?: string;
+  lastAnalyzedAt?: Date;
+}
+
+export interface WastePattern {
+  ingredientName: string;
+  wasteCount: number;
+  totalCount: number;
+  wasteFrequency: number;
 }
 
 // Items that typically expire quickly and need expiry date prompts

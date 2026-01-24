@@ -76,7 +76,7 @@ export async function GET() {
 
     const { data: ingredients, error: ingredientsError } = await supabase
       .from("ingredients")
-      .select("*")
+      .select("id,name,quantity,unit,expiry_date,image_status,is_pantry_staple")
       .eq("user_id", user.id)
       .eq("is_excluded", false)
       .order("created_at", { ascending: false });
@@ -90,7 +90,12 @@ export async function GET() {
 
     if (staplesError) throw staplesError;
 
-    return NextResponse.json({ ingredients, pantryStaples });
+    const ingredientsSafe = (ingredients || []).map((item) => ({
+      ...item,
+      image_url: null,
+    }));
+
+    return NextResponse.json({ ingredients: ingredientsSafe, pantryStaples });
   } catch (error) {
     console.error("Get ingredients error:", error);
     return NextResponse.json(

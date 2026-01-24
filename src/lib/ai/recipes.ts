@@ -122,7 +122,7 @@ async function callSeaLion(
         },
         body: JSON.stringify({
           messages,
-          max_tokens: 4000,
+          max_tokens: 16000,
           temperature: 0.7,
         }),
         signal: controller.signal,
