@@ -61,7 +61,7 @@ If quantity isn't clear, leave it null.`,
                 ],
             },
         ],
-        max_tokens: 2000,
+        max_completion_tokens: 4000,
         response_format: { type: "json_object" },
     });
 
@@ -132,7 +132,7 @@ The image should be:
 - High quality and realistic
 - Centered composition
 - Well-lit and appetizing
-- Landscape orientation (wide, ~21:9 aspect ratio)`,
+- Square orientation (1:1 aspect ratio)`,
         config: {
             responseModalities: [Modality.TEXT, Modality.IMAGE],
         },
