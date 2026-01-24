@@ -1,14 +1,153 @@
 import OpenAI from "openai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import type { Recipe } from "@/types";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const geminiApiKey = process.env.GEMINI_API_KEY;
+const genai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
+
 // Cloudflare Workers AI endpoint for SEA-LION
 const CLOUDFLARE_ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
 const CLOUDFLARE_API_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
 const SEA_LION_MODEL = "@cf/aisingapore/gemma-sea-lion-v4-27b-it";
+
+async function callSeaLionStream(
+  messages: { role: string; content: string }[],
+): Promise<string | null> {
+  if (!CLOUDFLARE_ACCOUNT_ID || !CLOUDFLARE_API_TOKEN) {
+    console.log("Cloudflare credentials not found");
+    return null;
+  }
+
+  try {
+    console.log("Calling SEA-LION API (streaming)...");
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/${SEA_LION_MODEL}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages,
+          max_tokens: 16000,
+          temperature: 0.7,
+          stream: true,
+        }),
+        signal: controller.signal,
+      },
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("SEA-LION API error:", response.status, errorText);
+      clearTimeout(timeoutId);
+      return null;
+    }
+
+    if (!response.body) {
+      clearTimeout(timeoutId);
+      return null;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let output = "";
+    let done = false;
+
+    while (!done) {
+      const { value, done: readerDone } = await reader.read();
+      if (readerDone) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const data = trimmed.slice(5).trim();
+        if (!data || data === "[DONE]") {
+          done = true;
+          break;
+        }
+
+        try {
+          const parsed = JSON.parse(data);
+          const token =
+            parsed.response ||
+            parsed.result?.response ||
+            parsed.choices?.[0]?.delta?.content ||
+            parsed.result?.choices?.[0]?.delta?.content ||
+            parsed.result?.choices?.[0]?.message?.content;
+          if (token) {
+            output += token;
+          }
+        } catch {
+          // Fallback: append raw data if JSON parsing fails
+          output += data;
+        }
+      }
+    }
+
+    clearTimeout(timeoutId);
+    const leftover = buffer.trim();
+    if (leftover.startsWith("data:")) {
+      const data = leftover.slice(5).trim();
+      if (data && data !== "[DONE]") {
+        try {
+          const parsed = JSON.parse(data);
+          const token =
+            parsed.response ||
+            parsed.result?.response ||
+            parsed.choices?.[0]?.delta?.content ||
+            parsed.result?.choices?.[0]?.delta?.content ||
+            parsed.result?.choices?.[0]?.message?.content;
+          if (token) {
+            output += token;
+          }
+        } catch {
+          output += data;
+        }
+      }
+    }
+    
+    const finalOutput = output.trim();
+    if (!finalOutput) return null;
+    
+    // Validate that we have complete JSON before returning
+    try {
+      // Try to extract and validate JSON
+      let jsonStr = finalOutput;
+      const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0];
+        // Test parse to ensure it's valid
+        JSON.parse(jsonStr);
+        return jsonStr;
+      }
+      return finalOutput;
+    } catch (e) {
+      console.error("Streamed output is not valid JSON, returning null to trigger fallback");
+      return null;
+    }
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      console.error("SEA-LION stream timed out after 120s");
+    } else {
+      console.error("SEA-LION streaming request failed:", error);
+    }
+    return null;
+  }
+}
 
 async function callSeaLion(
   messages: { role: string; content: string }[],
@@ -34,7 +173,7 @@ async function callSeaLion(
         },
         body: JSON.stringify({
           messages,
-          max_tokens: 4000,
+          max_tokens: 16000,
           temperature: 0.7,
         }),
         signal: controller.signal,
@@ -81,7 +220,7 @@ async function callOpenAI(
   messages: { role: string; content: string }[],
 ): Promise<string> {
   const response = await openai.chat.completions.create({
-    model: "gpt-4.1-mini",
+    model: "gpt-5-mini",
     messages: messages.map((m) => ({
       role: m.role as "system" | "user" | "assistant",
       content: m.content,
@@ -90,6 +229,39 @@ async function callOpenAI(
   });
 
   return response.choices[0]?.message?.content || "{}";
+}
+
+async function generateRecipeImage(title: string): Promise<string | undefined> {
+  if (!genai) {
+    return undefined;
+  }
+
+  try {
+    const response = await genai.models.generateContent({
+      model: "gemini-2.0-flash-exp-image-generation",
+      contents: `Generate a realistic, high-quality food photograph of "${title}".
+The image must look like real food photography, not illustration or CGI.
+- plated and appetizing, centered composition
+- natural lighting, shallow depth of field
+- clean, minimal background with no text or people
+- landscape orientation (wide, ~3:2 aspect ratio)`,
+      config: {
+        responseModalities: [Modality.TEXT, Modality.IMAGE],
+      },
+    });
+
+    if (response.candidates && response.candidates[0]?.content?.parts) {
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+        }
+      }
+    }
+  } catch (error) {
+    console.error("Failed to generate recipe image:", error);
+  }
+
+  return undefined;
 }
 
 interface GenerateRecipesResult {
@@ -175,16 +347,25 @@ ${recipeFormat}`;
   let modelUsed = "";
 
   if (useSeaLion) {
-    response = await callSeaLion(messages);
+    response = await callSeaLionStream(messages);
     if (response) {
       modelUsed = "SEA-LION (Cloudflare)";
     }
   }
 
   if (!response) {
-    console.log("Using GPT-4.1 Mini for recipe generation");
+    if (useSeaLion) {
+      response = await callSeaLion(messages);
+      if (response) {
+        modelUsed = "SEA-LION (Cloudflare)";
+      }
+    }
+  }
+
+  if (!response) {
+    console.log("Using GPT-5 Mini for recipe generation");
     response = await callOpenAI(messages);
-    modelUsed = "GPT-4.1 Mini (OpenAI)";
+    modelUsed = "GPT-5 Mini (OpenAI)";
   }
 
   try {
@@ -209,10 +390,19 @@ ${recipeFormat}`;
     }
 
     const parsed = JSON.parse(jsonStr);
-    return { recipes: parsed.recipes || [], modelUsed };
+    const recipes = parsed.recipes || [];
+    const recipesWithImages = await Promise.all(
+      recipes.map(async (recipe: Recipe) => ({
+        ...recipe,
+        imageUrl: await generateRecipeImage(recipe.title),
+      })),
+    );
+    return { recipes: recipesWithImages, modelUsed };
   } catch (error) {
     console.error("Failed to parse recipe response:", error);
-    console.error("Raw response:", response);
+    console.error("Raw response length:", response?.length || 0);
+    console.error("Raw response preview:", response?.slice(0, 500));
+    console.error("Raw response end:", response?.slice(-500));
     return { recipes: [], modelUsed };
   }
 }

@@ -19,7 +19,7 @@ export async function extractReceiptItems(
   imageBase64: string,
 ): Promise<ExtractedItem[]> {
   const response = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-5",
     messages: [
       {
         role: "system",
@@ -79,7 +79,7 @@ export async function classifyExpiryItems(
   items: string[],
 ): Promise<{ name: string; needsExpiry: boolean }[]> {
   const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: "gpt-5-mini",
     messages: [
       {
         role: "system",
@@ -136,7 +136,8 @@ The image should be:
 - Food photography style
 - High quality and realistic
 - Centered composition
-- Well-lit and appetizing`,
+- Well-lit and appetizing
+- Landscape orientation (wide, ~21:9 aspect ratio)`,
     config: {
       responseModalities: [Modality.TEXT, Modality.IMAGE],
     },

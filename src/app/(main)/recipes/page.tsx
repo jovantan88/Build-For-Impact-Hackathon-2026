@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +42,7 @@ interface Recipe {
   instructions: string[];
   cookTime?: string;
   servings?: number;
+  imageUrl?: string;
 }
 
 export default function RecipesPage() {
@@ -95,6 +97,22 @@ export default function RecipesPage() {
       className="cursor-pointer hover:shadow-md transition-shadow"
       onClick={() => setSelectedRecipe(recipe)}
     >
+      <div className="relative h-70 w-full overflow-hidden bg-gray-100">
+        {recipe.imageUrl ? (
+          <Image
+            src={recipe.imageUrl}
+            alt={recipe.title}
+            fill
+            sizes="(min-width: 768px) 50vw, 100vw"
+            className="object-cover"
+            unoptimized
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center text-gray-300">
+            <ChefHat className="w-10 h-10" />
+          </div>
+        )}
+      </div>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
           <CardTitle className="text-lg">{recipe.title}</CardTitle>
@@ -145,6 +163,7 @@ export default function RecipesPage() {
 
   const RecipeSkeleton = () => (
     <Card>
+      <Skeleton className="h-36 w-full" />
       <CardHeader className="pb-2">
         <Skeleton className="h-6 w-3/4" />
         <div className="flex gap-1 mt-2">
@@ -314,6 +333,18 @@ export default function RecipesPage() {
               </DialogHeader>
 
               <div className="space-y-6">
+                {selectedRecipe.imageUrl && (
+                  <div className="relative h-70 w-full overflow-hidden rounded-lg bg-gray-100">
+                    <Image
+                      src={selectedRecipe.imageUrl}
+                      alt={selectedRecipe.title}
+                      fill
+                      sizes="100vw"
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </div>
+                )}
                 {/* Meta info */}
                 <div className="flex items-center gap-4 text-sm text-gray-500">
                   {selectedRecipe.cookTime && (

@@ -86,7 +86,7 @@ export default function ReviewPage() {
   };
 
   const handleContinue = () => {
-    // Filter items that need expiry dates
+    // Filter items that need freshness dates
     const itemsNeedingExpiry = ingredients.filter((i) => i.needsExpiryDate);
 
     if (itemsNeedingExpiry.length > 0) {
@@ -233,7 +233,7 @@ export default function ReviewPage() {
                       </div>
                       {item.needsExpiryDate && (
                         <Badge variant="outline" className="text-amber-600 border-amber-300">
-                          Needs expiry
+                          Needs freshness date
                         </Badge>
                       )}
                       <Button
