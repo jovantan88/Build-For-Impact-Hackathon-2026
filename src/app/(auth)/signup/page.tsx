@@ -1,126 +1,39 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { toast } from "sonner";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthForm } from "@/components/auth-form";
+import { signup } from "../actions";
+
+const signupFields = [
+    { name: "email", label: "Email", type: "email", placeholder: "you@example.com" },
+    { name: "password", label: "Password", type: "password", placeholder: "••••••••" },
+    { name: "confirmPassword", label: "Confirm Password", type: "password", placeholder: "••••••••" },
+];
+
+async function signupAction(_prevState: { error: string | null }, formData: FormData) {
+    "use server";
+    return signup(formData);
+}
 
 export default function SignupPage() {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
-
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
-
-    setLoading(true);
-
-    const supabase = createClient();
-
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-
-    if (error) {
-      toast.error(error.message);
-      setLoading(false);
-      return;
-    }
-
-    toast.success("Account created! Welcome to E-Fridge!");
-    router.push("/fridge");
-    router.refresh();
-  };
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl font-bold text-emerald-700">
-            Create Account
-          </CardTitle>
-          <CardDescription>
-            Start managing your groceries smarter
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type="password"
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button
-              type="submit"
-              className="w-full bg-emerald-600 hover:bg-emerald-700"
-              disabled={loading}
-            >
-              {loading ? "Creating account..." : "Create Account"}
-            </Button>
-            <p className="text-sm text-gray-600">
-              Already have an account?{" "}
-              <Link href="/login" className="text-emerald-600 hover:underline">
-                Sign in
-              </Link>
-            </p>
-          </CardFooter>
-        </form>
-      </Card>
-    </div>
-  );
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+            <Card className="w-full max-w-md">
+                <CardHeader className="text-center">
+                    <CardTitle className="text-2xl font-bold text-primary">Create Account</CardTitle>
+                    <CardDescription>Start managing your groceries smarter</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <AuthForm action={signupAction} submitLabel="Create Account" loadingLabel="Creating account..." fields={signupFields} />
+                </CardContent>
+                <CardFooter className="justify-center">
+                    <p className="text-sm text-muted-foreground">
+                        Already have an account?{" "}
+                        <Link href="/login" className="text-primary hover:underline">
+                            Sign in
+                        </Link>
+                    </p>
+                </CardFooter>
+            </Card>
+        </div>
+    );
 }

@@ -142,7 +142,7 @@ export default function RecipesPage() {
                     if (!line.trim()) continue;
 
                     const eventMatch = line.match(/event: (\w+)/);
-                    const dataMatch = line.match(/data: (.+)/s);
+                    const dataMatch = line.match(/data: ([\s\S]+)/);
 
                     if (!eventMatch || !dataMatch) continue;
 
@@ -335,7 +335,7 @@ export default function RecipesPage() {
                 </div>
             </CardHeader>
             <CardContent>
-                <div className="flex items-center gap-4 text-sm text-gray-500 mb-3">
+                <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
                     {recipe.cookTime && (
                         <span className="flex items-center gap-1">
                             <Clock className="w-4 h-4" />
@@ -351,7 +351,7 @@ export default function RecipesPage() {
                 </div>
 
                 {recipe.missingIngredients && recipe.missingIngredients.length > 0 && (
-                    <div className="flex items-center gap-1 text-amber-600">
+                    <div className="flex items-center gap-1 text-amber-600 dark:text-amber-500">
                         <ShoppingCart className="w-3 h-3" />
                         <span className="text-xs">Need {recipe.missingIngredients.length} more</span>
                     </div>
@@ -378,21 +378,24 @@ export default function RecipesPage() {
     );
 
     const SearchResultCard = ({ result, index }: { result: SearchResult; index: number }) => (
-        <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500 bg-blue-50 border-blue-200" style={{ animationDelay: `${index * 100}ms` }}>
+        <Card
+            className="animate-in fade-in slide-in-from-bottom-4 duration-500 bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800"
+            style={{ animationDelay: `${index * 100}ms` }}
+        >
             <CardContent className="p-3">
                 <div className="flex items-start gap-2">
-                    <Search className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                    <Search className="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                         <a
                             href={result.url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="font-medium text-sm text-blue-700 hover:underline line-clamp-1 flex items-center gap-1"
+                            className="font-medium text-sm text-blue-700 dark:text-blue-400 hover:underline line-clamp-1 flex items-center gap-1"
                         >
                             {result.title}
                             <ExternalLink className="w-3 h-3" />
                         </a>
-                        <p className="text-xs text-gray-600 line-clamp-2 mt-1">{result.text}</p>
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{result.text}</p>
                     </div>
                 </div>
             </CardContent>
@@ -403,8 +406,8 @@ export default function RecipesPage() {
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Recipes</h1>
-                    <p className="text-gray-600">AI-generated recipes based on your ingredients</p>
+                    <h1 className="text-2xl font-bold text-foreground">Recipes</h1>
+                    <p className="text-muted-foreground">AI-generated recipes based on your ingredients</p>
                 </div>
                 <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading || isStreaming}>
                     <RefreshCw className={`w-4 h-4 mr-2 ${loading || isStreaming ? "animate-spin" : ""}`} />
@@ -416,27 +419,27 @@ export default function RecipesPage() {
             <Card className="p-4">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <Sparkles className="w-5 h-5 text-purple-500" />
+                        <Sparkles className="w-5 h-5 text-primary" />
                         <div>
                             <Label htmlFor="model-toggle" className="font-medium">
                                 AI Model
                             </Label>
-                            <p className="text-xs text-gray-500">{useSeaLion ? MODEL_DISPLAY_NAMES.SEA_LION : MODEL_DISPLAY_NAMES.GPT}</p>
+                            <p className="text-xs text-muted-foreground">{useSeaLion ? MODEL_DISPLAY_NAMES.SEA_LION : MODEL_DISPLAY_NAMES.GPT}</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <span className={`text-sm ${!useSeaLion ? "font-medium" : "text-gray-400"}`}>{MODEL_DISPLAY_NAMES.GPT_SHORT}</span>
+                        <span className={`text-sm ${!useSeaLion ? "font-medium" : "text-muted-foreground"}`}>{MODEL_DISPLAY_NAMES.GPT_SHORT}</span>
                         <Switch id="model-toggle" checked={useSeaLion} onCheckedChange={handleModelToggle} />
-                        <span className={`text-sm ${useSeaLion ? "font-medium" : "text-gray-400"}`}>{MODEL_DISPLAY_NAMES.SEA_LION_SHORT}</span>
+                        <span className={`text-sm ${useSeaLion ? "font-medium" : "text-muted-foreground"}`}>{MODEL_DISPLAY_NAMES.SEA_LION_SHORT}</span>
                     </div>
                 </div>
-                {currentModel && <p className="text-xs text-gray-400 mt-2">Last generated with: {currentModel}</p>}
+                {currentModel && <p className="text-xs text-muted-foreground mt-2">Last generated with: {currentModel}</p>}
             </Card>
 
             {/* Search Results - Floating Cards */}
             {searchResults.length > 0 && (
                 <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Search className="w-4 h-4" />
                         <span>Recipe inspirations from the web</span>
                     </div>
@@ -450,12 +453,12 @@ export default function RecipesPage() {
 
             {/* Streaming Text Preview */}
             {isStreaming && streamingText && (
-                <Card className="p-4 bg-gray-50">
+                <Card className="p-4 bg-muted">
                     <div className="flex items-center gap-2 mb-2">
-                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-                        <span className="text-sm font-medium text-gray-700">Generating recipes...</span>
+                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                        <span className="text-sm font-medium text-foreground">Generating recipes...</span>
                     </div>
-                    <pre className="text-xs text-gray-500 whitespace-pre-wrap max-h-32 overflow-y-auto font-mono">{streamingText.slice(-500)}</pre>
+                    <pre className="text-xs text-muted-foreground whitespace-pre-wrap max-h-32 overflow-y-auto font-mono">{streamingText.slice(-500)}</pre>
                 </Card>
             )}
 
@@ -472,7 +475,7 @@ export default function RecipesPage() {
                 </TabsList>
 
                 <TabsContent value="cook_now" className="mt-4">
-                    <p className="text-sm text-gray-500 mb-4">Recipes you can make with ingredients you already have</p>
+                    <p className="text-sm text-muted-foreground mb-4">Recipes you can make with ingredients you already have</p>
                     {loading && !isStreaming ? (
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                             {[...Array(3)].map((_, i) => (
@@ -481,9 +484,9 @@ export default function RecipesPage() {
                         </div>
                     ) : recipes.length === 0 && !isStreaming ? (
                         <Card className="p-8 text-center">
-                            <ChefHat className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                            <h3 className="font-medium text-gray-900">No recipes found</h3>
-                            <p className="text-sm text-gray-500 mt-1">Add more ingredients to your fridge to get recipe suggestions</p>
+                            <ChefHat className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                            <h3 className="font-medium text-foreground">No recipes found</h3>
+                            <p className="text-sm text-muted-foreground mt-1">Add more ingredients to your fridge to get recipe suggestions</p>
                         </Card>
                     ) : (
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -495,7 +498,7 @@ export default function RecipesPage() {
                 </TabsContent>
 
                 <TabsContent value="buy_more" className="mt-4">
-                    <p className="text-sm text-gray-500 mb-4">Recipes you can make with just a few more items</p>
+                    <p className="text-sm text-muted-foreground mb-4">Recipes you can make with just a few more items</p>
                     {loading && !isStreaming ? (
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                             {[...Array(3)].map((_, i) => (
@@ -504,9 +507,9 @@ export default function RecipesPage() {
                         </div>
                     ) : recipes.length === 0 && !isStreaming ? (
                         <Card className="p-8 text-center">
-                            <ChefHat className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-                            <h3 className="font-medium text-gray-900">No recipes found</h3>
-                            <p className="text-sm text-gray-500 mt-1">Add more ingredients to your fridge to get recipe suggestions</p>
+                            <ChefHat className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+                            <h3 className="font-medium text-foreground">No recipes found</h3>
+                            <p className="text-sm text-muted-foreground mt-1">Add more ingredients to your fridge to get recipe suggestions</p>
                         </Card>
                     ) : (
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -563,7 +566,7 @@ export default function RecipesPage() {
                             </DialogHeader>
 
                             <div className="space-y-6">
-                                <div className="flex items-center gap-4 text-sm text-gray-500">
+                                <div className="flex items-center gap-4 text-sm text-muted-foreground">
                                     {selectedRecipe.cookTime && (
                                         <span className="flex items-center gap-1">
                                             <Clock className="w-4 h-4" />
@@ -579,16 +582,16 @@ export default function RecipesPage() {
                                 </div>
 
                                 <div>
-                                    <h3 className="font-semibold text-gray-900 mb-2">Ingredients</h3>
+                                    <h3 className="font-semibold text-foreground mb-2">Ingredients</h3>
                                     <ul className="space-y-1">
                                         {selectedRecipe.ingredients?.map((ing, idx) => (
                                             <li key={idx} className="flex items-center gap-2 text-sm">
-                                                <span className={`w-2 h-2 rounded-full ${ing.available ? "bg-emerald-500" : "bg-gray-300"}`} />
-                                                <span className={ing.available ? "" : "text-gray-400"}>
+                                                <span className={`w-2 h-2 rounded-full ${ing.available ? "bg-primary" : "bg-muted-foreground"}`} />
+                                                <span className={ing.available ? "" : "text-muted-foreground"}>
                                                     {ing.quantity} {ing.unit} {ing.name}
                                                 </span>
                                                 {ing.available && (
-                                                    <Badge variant="outline" className="text-xs text-emerald-600">
+                                                    <Badge variant="outline" className="text-xs text-primary">
                                                         Have
                                                     </Badge>
                                                 )}
@@ -599,13 +602,13 @@ export default function RecipesPage() {
 
                                 {selectedRecipe.missingIngredients && selectedRecipe.missingIngredients.length > 0 && (
                                     <div>
-                                        <h3 className="font-semibold text-amber-700 mb-2 flex items-center gap-2">
+                                        <h3 className="font-semibold text-amber-700 dark:text-amber-500 mb-2 flex items-center gap-2">
                                             <ShoppingCart className="w-4 h-4" />
                                             Shopping List
                                         </h3>
                                         <ul className="space-y-1">
                                             {selectedRecipe.missingIngredients.map((ing, idx) => (
-                                                <li key={idx} className="text-sm text-amber-700">
+                                                <li key={idx} className="text-sm text-amber-700 dark:text-amber-500">
                                                     {ing.quantity} {ing.unit} {ing.name}
                                                 </li>
                                             ))}
@@ -614,14 +617,14 @@ export default function RecipesPage() {
                                 )}
 
                                 <div>
-                                    <h3 className="font-semibold text-gray-900 mb-2">Instructions</h3>
+                                    <h3 className="font-semibold text-foreground mb-2">Instructions</h3>
                                     <ol className="space-y-3">
                                         {selectedRecipe.instructions?.map((step, idx) => (
                                             <li key={idx} className="flex gap-3 text-sm">
-                                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-xs font-medium">
+                                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-medium">
                                                     {idx + 1}
                                                 </span>
-                                                <span className="text-gray-700">{step}</span>
+                                                <span className="text-foreground">{step}</span>
                                             </li>
                                         ))}
                                     </ol>
