@@ -16,6 +16,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const mode =
       (searchParams.get("mode") as "cook_now" | "buy_more") || "cook_now";
+    const model = searchParams.get("model") || "sea-lion";
 
     // Get user's ingredients
     const { data: ingredients, error: ingredientsError } = await supabase
@@ -45,10 +46,16 @@ export async function GET(request: NextRequest) {
 
     const stapleNames = (pantryStaples || []).map((s) => s.name);
 
-    // Generate recipes using SEA-LION
-    const recipes = await generateRecipes(ingredientNames, stapleNames, mode);
+    // Generate recipes
+    const useSeaLion = model === "sea-lion";
+    const { recipes, modelUsed } = await generateRecipes(
+      ingredientNames,
+      stapleNames,
+      mode,
+      useSeaLion,
+    );
 
-    return NextResponse.json({ recipes, mode });
+    return NextResponse.json({ recipes, mode, model: modelUsed });
   } catch (error) {
     console.error("Recipe generation error:", error);
     return NextResponse.json(

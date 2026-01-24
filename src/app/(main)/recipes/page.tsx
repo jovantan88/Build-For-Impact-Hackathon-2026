@@ -1,18 +1,28 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ChefHat, Clock, Users, ShoppingCart, Check, RefreshCw } from "lucide-react";
+import {
+  ChefHat,
+  Clock,
+  Users,
+  ShoppingCart,
+  Check,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
 import { toast } from "sonner";
 
 interface RecipeIngredient {
@@ -34,23 +44,33 @@ interface Recipe {
 }
 
 export default function RecipesPage() {
-  const [activeTab, setActiveTab] = useState<"cook_now" | "buy_more">("cook_now");
+  const [activeTab, setActiveTab] = useState<"cook_now" | "buy_more">(
+    "cook_now",
+  );
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
+  const [useSeaLion, setUseSeaLion] = useState(true);
+  const [currentModel, setCurrentModel] = useState<string>("");
 
   useEffect(() => {
-    fetchRecipes(activeTab);
+    fetchRecipes(activeTab, useSeaLion);
   }, [activeTab]);
 
-  const fetchRecipes = async (mode: "cook_now" | "buy_more") => {
+  const fetchRecipes = async (
+    mode: "cook_now" | "buy_more",
+    seaLion: boolean,
+  ) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/recipes?mode=${mode}`);
+      const res = await fetch(
+        `/api/recipes?mode=${mode}&model=${seaLion ? "sea-lion" : "gpt"}`,
+      );
       const data = await res.json();
 
       if (res.ok) {
         setRecipes(data.recipes || []);
+        setCurrentModel(data.model || "");
       } else {
         toast.error("Failed to generate recipes");
       }
@@ -63,7 +83,11 @@ export default function RecipesPage() {
   };
 
   const handleRefresh = () => {
-    fetchRecipes(activeTab);
+    fetchRecipes(activeTab, useSeaLion);
+  };
+
+  const handleModelToggle = (checked: boolean) => {
+    setUseSeaLion(checked);
   };
 
   const RecipeCard = ({ recipe }: { recipe: Recipe }) => (
@@ -105,14 +129,15 @@ export default function RecipesPage() {
           <p className="text-xs font-medium text-gray-700">
             {recipe.ingredients?.length || 0} ingredients
           </p>
-          {recipe.missingIngredients && recipe.missingIngredients.length > 0 && (
-            <div className="flex items-center gap-1 text-amber-600">
-              <ShoppingCart className="w-3 h-3" />
-              <span className="text-xs">
-                Need {recipe.missingIngredients.length} more
-              </span>
-            </div>
-          )}
+          {recipe.missingIngredients &&
+            recipe.missingIngredients.length > 0 && (
+              <div className="flex items-center gap-1 text-amber-600">
+                <ShoppingCart className="w-3 h-3" />
+                <span className="text-xs">
+                  Need {recipe.missingIngredients.length} more
+                </span>
+              </div>
+            )}
         </div>
       </CardContent>
     </Card>
@@ -143,13 +168,64 @@ export default function RecipesPage() {
             AI-generated recipes based on your ingredients
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
-          <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleRefresh}
+          disabled={loading}
+        >
+          <RefreshCw
+            className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
+          />
           Refresh
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "cook_now" | "buy_more")}>
+      {/* Model Toggle */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Sparkles className="w-5 h-5 text-purple-500" />
+            <div>
+              <Label htmlFor="model-toggle" className="font-medium">
+                AI Model
+              </Label>
+              <p className="text-xs text-gray-500">
+                {useSeaLion
+                  ? "SEA-LION (Southeast Asian specialized)"
+                  : "GPT-5 Mini (OpenAI)"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`text-sm ${!useSeaLion ? "font-medium" : "text-gray-400"}`}
+            >
+              GPT
+            </span>
+            <Switch
+              id="model-toggle"
+              checked={useSeaLion}
+              onCheckedChange={handleModelToggle}
+            />
+            <span
+              className={`text-sm ${useSeaLion ? "font-medium" : "text-gray-400"}`}
+            >
+              SEA-LION
+            </span>
+          </div>
+        </div>
+        {currentModel && (
+          <p className="text-xs text-gray-400 mt-2">
+            Last generated with: {currentModel}
+          </p>
+        )}
+      </Card>
+
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as "cook_now" | "buy_more")}
+      >
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="cook_now" className="flex items-center gap-2">
             <Check className="w-4 h-4" />
@@ -217,12 +293,17 @@ export default function RecipesPage() {
       </Tabs>
 
       {/* Recipe Detail Dialog */}
-      <Dialog open={!!selectedRecipe} onOpenChange={() => setSelectedRecipe(null)}>
+      <Dialog
+        open={!!selectedRecipe}
+        onOpenChange={() => setSelectedRecipe(null)}
+      >
         <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
           {selectedRecipe && (
             <>
               <DialogHeader>
-                <DialogTitle className="text-xl">{selectedRecipe.title}</DialogTitle>
+                <DialogTitle className="text-xl">
+                  {selectedRecipe.title}
+                </DialogTitle>
                 <div className="flex flex-wrap gap-1 mt-2">
                   {selectedRecipe.cuisineStyle?.map((style) => (
                     <Badge key={style} variant="secondary">
@@ -251,7 +332,9 @@ export default function RecipesPage() {
 
                 {/* Ingredients */}
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-2">Ingredients</h3>
+                  <h3 className="font-semibold text-gray-900 mb-2">
+                    Ingredients
+                  </h3>
                   <ul className="space-y-1">
                     {selectedRecipe.ingredients?.map((ing, idx) => (
                       <li key={idx} className="flex items-center gap-2 text-sm">
@@ -264,7 +347,10 @@ export default function RecipesPage() {
                           {ing.quantity} {ing.unit} {ing.name}
                         </span>
                         {ing.available && (
-                          <Badge variant="outline" className="text-xs text-emerald-600">
+                          <Badge
+                            variant="outline"
+                            className="text-xs text-emerald-600"
+                          >
                             Have
                           </Badge>
                         )}
@@ -293,7 +379,9 @@ export default function RecipesPage() {
 
                 {/* Instructions */}
                 <div>
-                  <h3 className="font-semibold text-gray-900 mb-2">Instructions</h3>
+                  <h3 className="font-semibold text-gray-900 mb-2">
+                    Instructions
+                  </h3>
                   <ol className="space-y-3">
                     {selectedRecipe.instructions?.map((step, idx) => (
                       <li key={idx} className="flex gap-3 text-sm">
