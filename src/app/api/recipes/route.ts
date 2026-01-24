@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { generateRecipes } from "@/lib/ai/recipes";
+import { generateRecipes, searchRecipesForClient } from "@/lib/ai/recipes";
 
 export async function GET(request: NextRequest) {
   try {
@@ -48,18 +48,49 @@ export async function GET(request: NextRequest) {
 
     // Generate recipes
     const useSeaLion = model === "sea-lion";
-    const { recipes, modelUsed } = await generateRecipes(
+    const { recipes, modelUsed, searchResults } = await generateRecipes(
       ingredientNames,
       stapleNames,
       mode,
       useSeaLion,
     );
 
-    return NextResponse.json({ recipes, mode, model: modelUsed });
+    return NextResponse.json({
+      recipes,
+      mode,
+      model: modelUsed,
+      searchResults,
+    });
   } catch (error) {
     console.error("Recipe generation error:", error);
     return NextResponse.json(
       { error: "Failed to generate recipes" },
+      { status: 500 },
+    );
+  }
+}
+
+// Separate endpoint for just searching (for streaming effect)
+export async function POST(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { ingredients } = await request.json();
+
+    const searchResults = await searchRecipesForClient(ingredients || []);
+
+    return NextResponse.json({ searchResults });
+  } catch (error) {
+    console.error("Recipe search error:", error);
+    return NextResponse.json(
+      { error: "Failed to search recipes" },
       { status: 500 },
     );
   }

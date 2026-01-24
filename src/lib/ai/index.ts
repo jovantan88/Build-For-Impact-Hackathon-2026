@@ -154,3 +154,41 @@ The image should be:
 
   throw new Error("No image generated");
 }
+
+export async function generateFoodImage(
+  dishName: string,
+  cuisineStyle: string[] = [],
+): Promise<string> {
+  const cuisineDesc =
+    cuisineStyle.length > 0 ? cuisineStyle.join(", ") : "Southeast Asian";
+
+  // Use Gemini 3 Pro Image (Nano Banana) for food image generation
+  const response = await genai.models.generateContent({
+    model: "gemini-2.0-flash-exp-image-generation",
+    contents: `Generate a beautiful, appetizing photograph of ${dishName}, a ${cuisineDesc} dish.
+The image should be:
+- Professional food photography style
+- Served on an appropriate plate or bowl
+- Garnished beautifully
+- Warm, inviting lighting
+- Shallow depth of field
+- Top-down or 45-degree angle view
+- High resolution and realistic
+- Makes the viewer hungry`,
+    config: {
+      responseModalities: [Modality.TEXT, Modality.IMAGE],
+    },
+  });
+
+  // Extract image from response
+  if (response.candidates && response.candidates[0]?.content?.parts) {
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        // Return as base64 data URL
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
+    }
+  }
+
+  throw new Error("No image generated");
+}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,9 @@ import {
   Check,
   RefreshCw,
   Sparkles,
+  ExternalLink,
+  Search,
+  ImageIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -41,6 +44,60 @@ interface Recipe {
   instructions: string[];
   cookTime?: string;
   servings?: number;
+  imageUrl?: string;
+}
+
+interface SearchResult {
+  title: string;
+  url: string;
+  text: string;
+}
+
+interface CachedRecipes {
+  recipes: Recipe[];
+  searchResults: SearchResult[];
+  modelUsed: string;
+  timestamp: number;
+}
+
+const CACHE_KEY_PREFIX = "efridge_recipes_";
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+function getCacheKey(mode: string, model: string): string {
+  return `${CACHE_KEY_PREFIX}${mode}_${model}`;
+}
+
+function getFromCache(mode: string, model: string): CachedRecipes | null {
+  try {
+    const key = getCacheKey(mode, model);
+    const cached = localStorage.getItem(key);
+    if (!cached) return null;
+
+    const data = JSON.parse(cached) as CachedRecipes;
+    if (Date.now() - data.timestamp > CACHE_DURATION) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function setCache(
+  mode: string,
+  model: string,
+  data: Omit<CachedRecipes, "timestamp">,
+): void {
+  try {
+    const key = getCacheKey(mode, model);
+    localStorage.setItem(
+      key,
+      JSON.stringify({ ...data, timestamp: Date.now() }),
+    );
+  } catch {
+    // localStorage might be full
+  }
 }
 
 export default function RecipesPage() {
@@ -52,56 +109,246 @@ export default function RecipesPage() {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [useSeaLion, setUseSeaLion] = useState(true);
   const [currentModel, setCurrentModel] = useState<string>("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [generatingImageFor, setGeneratingImageFor] = useState<string | null>(
+    null,
+  );
+  const [streamingText, setStreamingText] = useState<string>("");
+  const [isStreaming, setIsStreaming] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const fetchRecipesStreaming = useCallback(
+    async (
+      mode: "cook_now" | "buy_more",
+      seaLion: boolean,
+      forceRefresh = false,
+    ) => {
+      const modelKey = seaLion ? "sea-lion" : "gpt";
+
+      // Check cache first (unless force refresh)
+      if (!forceRefresh) {
+        const cached = getFromCache(mode, modelKey);
+        if (cached) {
+          setRecipes(cached.recipes);
+          setSearchResults(cached.searchResults);
+          setCurrentModel(cached.modelUsed + " (cached)");
+          setLoading(false);
+          return;
+        }
+      }
+
+      // Abort any existing request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      abortControllerRef.current = new AbortController();
+
+      setLoading(true);
+      setIsStreaming(true);
+      setStreamingText("");
+      setSearchResults([]);
+      setRecipes([]);
+
+      try {
+        const response = await fetch(
+          `/api/recipes/stream?mode=${mode}&model=${modelKey}`,
+          { signal: abortControllerRef.current.signal },
+        );
+
+        if (!response.ok || !response.body) {
+          throw new Error("Failed to start stream");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        let buffer = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split("\n\n");
+          buffer = lines.pop() || "";
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+
+            const eventMatch = line.match(/event: (\w+)/);
+            const dataMatch = line.match(/data: (.+)/s);
+
+            if (!eventMatch || !dataMatch) continue;
+
+            const eventType = eventMatch[1];
+            const data = dataMatch[1];
+
+            switch (eventType) {
+              case "search_start":
+                // Search started
+                break;
+
+              case "search_results":
+                try {
+                  const results = JSON.parse(data);
+                  setSearchResults(results);
+                } catch {}
+                break;
+
+              case "generation_start":
+                // Generation started
+                break;
+
+              case "chunk":
+                try {
+                  const { content } = JSON.parse(data);
+                  setStreamingText((prev) => prev + content);
+                } catch {}
+                break;
+
+              case "complete":
+                try {
+                  const {
+                    recipes: finalRecipes,
+                    modelUsed,
+                    searchResults: finalSearch,
+                  } = JSON.parse(data);
+                  setRecipes(finalRecipes);
+                  setCurrentModel(modelUsed);
+                  setSearchResults(finalSearch);
+
+                  // Cache the results
+                  setCache(mode, modelKey, {
+                    recipes: finalRecipes,
+                    searchResults: finalSearch,
+                    modelUsed,
+                  });
+                } catch {}
+                setIsStreaming(false);
+                break;
+
+              case "error":
+                toast.error("Failed to generate recipes");
+                setIsStreaming(false);
+                break;
+            }
+          }
+        }
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+          // Request was aborted, ignore
+          return;
+        }
+        console.error("Streaming error:", error);
+        toast.error("Failed to generate recipes");
+      } finally {
+        setLoading(false);
+        setIsStreaming(false);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    fetchRecipes(activeTab, useSeaLion);
-  }, [activeTab]);
+    fetchRecipesStreaming(activeTab, useSeaLion);
 
-  const fetchRecipes = async (
-    mode: "cook_now" | "buy_more",
-    seaLion: boolean,
-  ) => {
-    setLoading(true);
-    try {
-      const res = await fetch(
-        `/api/recipes?mode=${mode}&model=${seaLion ? "sea-lion" : "gpt"}`,
-      );
-      const data = await res.json();
-
-      if (res.ok) {
-        setRecipes(data.recipes || []);
-        setCurrentModel(data.model || "");
-      } else {
-        toast.error("Failed to generate recipes");
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
-    } catch (error) {
-      console.error("Failed to fetch recipes:", error);
-      toast.error("Failed to generate recipes");
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+  }, [activeTab, fetchRecipesStreaming, useSeaLion]);
 
   const handleRefresh = () => {
-    fetchRecipes(activeTab, useSeaLion);
+    fetchRecipesStreaming(activeTab, useSeaLion, true);
   };
 
   const handleModelToggle = (checked: boolean) => {
     setUseSeaLion(checked);
   };
 
+  const handleGenerateImage = async (recipe: Recipe) => {
+    setGeneratingImageFor(recipe.id);
+    try {
+      const res = await fetch("/api/recipes/image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dishName: recipe.title,
+          cuisineStyle: recipe.cuisineStyle,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.imageUrl) {
+        setRecipes(
+          recipes.map((r) =>
+            r.id === recipe.id ? { ...r, imageUrl: data.imageUrl } : r,
+          ),
+        );
+        if (selectedRecipe?.id === recipe.id) {
+          setSelectedRecipe({ ...selectedRecipe, imageUrl: data.imageUrl });
+        }
+        toast.success("Image generated!");
+      } else {
+        toast.error("Failed to generate image");
+      }
+    } catch {
+      toast.error("Failed to generate image");
+    } finally {
+      setGeneratingImageFor(null);
+    }
+  };
+
   const RecipeCard = ({ recipe }: { recipe: Recipe }) => (
     <Card
-      className="cursor-pointer hover:shadow-md transition-shadow"
+      className="cursor-pointer hover:shadow-md transition-shadow overflow-hidden"
       onClick={() => setSelectedRecipe(recipe)}
     >
+      <div className="h-40 bg-gradient-to-br from-amber-100 to-orange-100 relative">
+        {recipe.imageUrl ? (
+          <img
+            src={recipe.imageUrl}
+            alt={recipe.title}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <ChefHat className="w-12 h-12 text-amber-300" />
+          </div>
+        )}
+        {!recipe.imageUrl && (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="absolute bottom-2 right-2 text-xs"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleGenerateImage(recipe);
+            }}
+            disabled={generatingImageFor === recipe.id}
+          >
+            {generatingImageFor === recipe.id ? (
+              <>
+                <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-1" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <ImageIcon className="w-3 h-3 mr-1" />
+                Generate
+              </>
+            )}
+          </Button>
+        )}
+      </div>
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
-          <CardTitle className="text-lg">{recipe.title}</CardTitle>
-          <ChefHat className="w-5 h-5 text-emerald-600" />
+          <CardTitle className="text-lg line-clamp-1">{recipe.title}</CardTitle>
         </div>
         <div className="flex flex-wrap gap-1">
-          {recipe.cuisineStyle?.map((style) => (
+          {recipe.cuisineStyle?.slice(0, 2).map((style) => (
             <Badge key={style} variant="secondary" className="text-xs">
               {style}
             </Badge>
@@ -119,32 +366,26 @@ export default function RecipesPage() {
           {recipe.servings && (
             <span className="flex items-center gap-1">
               <Users className="w-4 h-4" />
-              {recipe.servings} servings
+              {recipe.servings}
             </span>
           )}
         </div>
 
-        {/* Ingredients preview */}
-        <div className="space-y-1">
-          <p className="text-xs font-medium text-gray-700">
-            {recipe.ingredients?.length || 0} ingredients
-          </p>
-          {recipe.missingIngredients &&
-            recipe.missingIngredients.length > 0 && (
-              <div className="flex items-center gap-1 text-amber-600">
-                <ShoppingCart className="w-3 h-3" />
-                <span className="text-xs">
-                  Need {recipe.missingIngredients.length} more
-                </span>
-              </div>
-            )}
-        </div>
+        {recipe.missingIngredients && recipe.missingIngredients.length > 0 && (
+          <div className="flex items-center gap-1 text-amber-600">
+            <ShoppingCart className="w-3 h-3" />
+            <span className="text-xs">
+              Need {recipe.missingIngredients.length} more
+            </span>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
 
   const RecipeSkeleton = () => (
-    <Card>
+    <Card className="overflow-hidden">
+      <Skeleton className="h-40 w-full" />
       <CardHeader className="pb-2">
         <Skeleton className="h-6 w-3/4" />
         <div className="flex gap-1 mt-2">
@@ -155,6 +396,39 @@ export default function RecipesPage() {
       <CardContent>
         <Skeleton className="h-4 w-1/2 mb-3" />
         <Skeleton className="h-3 w-1/3" />
+      </CardContent>
+    </Card>
+  );
+
+  const SearchResultCard = ({
+    result,
+    index,
+  }: {
+    result: SearchResult;
+    index: number;
+  }) => (
+    <Card
+      className="animate-in fade-in slide-in-from-bottom-4 duration-500 bg-blue-50 border-blue-200"
+      style={{ animationDelay: `${index * 100}ms` }}
+    >
+      <CardContent className="p-3">
+        <div className="flex items-start gap-2">
+          <Search className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <a
+              href={result.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-sm text-blue-700 hover:underline line-clamp-1 flex items-center gap-1"
+            >
+              {result.title}
+              <ExternalLink className="w-3 h-3" />
+            </a>
+            <p className="text-xs text-gray-600 line-clamp-2 mt-1">
+              {result.text}
+            </p>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
@@ -172,10 +446,10 @@ export default function RecipesPage() {
           variant="outline"
           size="sm"
           onClick={handleRefresh}
-          disabled={loading}
+          disabled={loading || isStreaming}
         >
           <RefreshCw
-            className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`}
+            className={`w-4 h-4 mr-2 ${loading || isStreaming ? "animate-spin" : ""}`}
           />
           Refresh
         </Button>
@@ -193,7 +467,7 @@ export default function RecipesPage() {
               <p className="text-xs text-gray-500">
                 {useSeaLion
                   ? "SEA-LION (Southeast Asian specialized)"
-                  : "GPT-5 Mini (OpenAI)"}
+                  : "GPT-4.1 Mini (OpenAI)"}
               </p>
             </div>
           </div>
@@ -222,6 +496,40 @@ export default function RecipesPage() {
         )}
       </Card>
 
+      {/* Search Results - Floating Cards */}
+      {searchResults.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <Search className="w-4 h-4" />
+            <span>Recipe inspirations from the web</span>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+            {searchResults.map((result, index) => (
+              <SearchResultCard
+                key={result.url}
+                result={result}
+                index={index}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Streaming Text Preview */}
+      {isStreaming && streamingText && (
+        <Card className="p-4 bg-gray-50">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <span className="text-sm font-medium text-gray-700">
+              Generating recipes...
+            </span>
+          </div>
+          <pre className="text-xs text-gray-500 whitespace-pre-wrap max-h-32 overflow-y-auto font-mono">
+            {streamingText.slice(-500)}
+          </pre>
+        </Card>
+      )}
+
       <Tabs
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as "cook_now" | "buy_more")}
@@ -241,13 +549,13 @@ export default function RecipesPage() {
           <p className="text-sm text-gray-500 mb-4">
             Recipes you can make with ingredients you already have
           </p>
-          {loading ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {[...Array(4)].map((_, i) => (
+          {loading && !isStreaming ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[...Array(3)].map((_, i) => (
                 <RecipeSkeleton key={i} />
               ))}
             </div>
-          ) : recipes.length === 0 ? (
+          ) : recipes.length === 0 && !isStreaming ? (
             <Card className="p-8 text-center">
               <ChefHat className="w-12 h-12 mx-auto text-gray-300 mb-4" />
               <h3 className="font-medium text-gray-900">No recipes found</h3>
@@ -256,7 +564,7 @@ export default function RecipesPage() {
               </p>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {recipes.map((recipe) => (
                 <RecipeCard key={recipe.id} recipe={recipe} />
               ))}
@@ -268,13 +576,13 @@ export default function RecipesPage() {
           <p className="text-sm text-gray-500 mb-4">
             Recipes you can make with just a few more items
           </p>
-          {loading ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {[...Array(4)].map((_, i) => (
+          {loading && !isStreaming ? (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {[...Array(3)].map((_, i) => (
                 <RecipeSkeleton key={i} />
               ))}
             </div>
-          ) : recipes.length === 0 ? (
+          ) : recipes.length === 0 && !isStreaming ? (
             <Card className="p-8 text-center">
               <ChefHat className="w-12 h-12 mx-auto text-gray-300 mb-4" />
               <h3 className="font-medium text-gray-900">No recipes found</h3>
@@ -283,7 +591,7 @@ export default function RecipesPage() {
               </p>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {recipes.map((recipe) => (
                 <RecipeCard key={recipe.id} recipe={recipe} />
               ))}
@@ -297,9 +605,41 @@ export default function RecipesPage() {
         open={!!selectedRecipe}
         onOpenChange={() => setSelectedRecipe(null)}
       >
-        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           {selectedRecipe && (
             <>
+              <div className="h-48 -mx-6 -mt-6 mb-4 bg-gradient-to-br from-amber-100 to-orange-100 relative">
+                {selectedRecipe.imageUrl ? (
+                  <img
+                    src={selectedRecipe.imageUrl}
+                    alt={selectedRecipe.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                    <ChefHat className="w-16 h-16 text-amber-300" />
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => handleGenerateImage(selectedRecipe)}
+                      disabled={generatingImageFor === selectedRecipe.id}
+                    >
+                      {generatingImageFor === selectedRecipe.id ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2" />
+                          Generating Image...
+                        </>
+                      ) : (
+                        <>
+                          <ImageIcon className="w-4 h-4 mr-2" />
+                          Generate Image
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </div>
+
               <DialogHeader>
                 <DialogTitle className="text-xl">
                   {selectedRecipe.title}
@@ -314,7 +654,6 @@ export default function RecipesPage() {
               </DialogHeader>
 
               <div className="space-y-6">
-                {/* Meta info */}
                 <div className="flex items-center gap-4 text-sm text-gray-500">
                   {selectedRecipe.cookTime && (
                     <span className="flex items-center gap-1">
@@ -330,7 +669,6 @@ export default function RecipesPage() {
                   )}
                 </div>
 
-                {/* Ingredients */}
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">
                     Ingredients
@@ -359,7 +697,6 @@ export default function RecipesPage() {
                   </ul>
                 </div>
 
-                {/* Missing Ingredients */}
                 {selectedRecipe.missingIngredients &&
                   selectedRecipe.missingIngredients.length > 0 && (
                     <div>
@@ -377,7 +714,6 @@ export default function RecipesPage() {
                     </div>
                   )}
 
-                {/* Instructions */}
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-2">
                     Instructions
