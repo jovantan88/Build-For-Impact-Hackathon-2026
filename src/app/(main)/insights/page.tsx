@@ -5,7 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TrendingDown, ShoppingBag, Lightbulb, X, Check, AlertCircle, Leaf, DollarSign } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { TrendingDown, ShoppingBag, Lightbulb, X, Check, AlertCircle, Leaf, DollarSign, RefreshCw, Sparkles } from "lucide-react";
 
 interface Recommendation {
     ingredientName: string;
@@ -31,9 +32,17 @@ interface Insights {
 
 interface InsightsData {
     hasInsights: boolean;
+    cached?: boolean;
     message?: string;
     recommendations: Recommendation[];
     insights: Insights;
+}
+
+interface StreamEvent {
+    type: "status" | "patterns" | "stats" | "recommendation" | "summary" | "complete" | "error";
+    message?: string;
+    data?: any;
+    progress?: { current: number; total: number };
 }
 
 const recommendationColors = {
@@ -56,21 +65,135 @@ export default function InsightsPage() {
     const [data, setData] = useState<InsightsData | null>(null);
     const [loading, setLoading] = useState(true);
     const [dismissedItems, setDismissedItems] = useState<Set<string>>(new Set());
+    const [isGenerating, setIsGenerating] = useState(false);
+    const [generationStatus, setGenerationStatus] = useState<string>("");
+    const [generationProgress, setGenerationProgress] = useState<{ current: number; total: number } | null>(null);
+    const [streamingRecommendations, setStreamingRecommendations] = useState<Recommendation[]>([]);
 
     useEffect(() => {
         fetchInsights();
     }, []);
 
-    const fetchInsights = async () => {
+    const fetchInsights = async (forceRefresh = false) => {
         try {
             setLoading(true);
-            const response = await fetch("/api/insights");
+            const url = forceRefresh ? "/api/insights?refresh=true" : "/api/insights";
+            const response = await fetch(url);
             const result = await response.json();
             setData(result);
+            setStreamingRecommendations([]);
         } catch (error) {
             console.error("Error fetching insights:", error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleGenerateWithStream = async () => {
+        try {
+            setIsGenerating(true);
+            setGenerationStatus("Starting generation...");
+            setGenerationProgress(null);
+            setStreamingRecommendations([]);
+
+            const response = await fetch("/api/insights/stream");
+            if (!response.ok) throw new Error("Stream failed");
+
+            const reader = response.body?.getReader();
+            const decoder = new TextDecoder();
+
+            if (!reader) throw new Error("No reader available");
+
+            let buffer = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n\n");
+                buffer = lines.pop() || "";
+
+                for (const line of lines) {
+                    if (line.startsWith("data: ")) {
+                        try {
+                            const event: StreamEvent = JSON.parse(line.slice(6));
+
+                            switch (event.type) {
+                                case "status":
+                                    setGenerationStatus(event.message || "");
+                                    break;
+
+                                case "patterns":
+                                    setGenerationStatus(`Found ${event.data?.length || 0} waste patterns`);
+                                    break;
+
+                                case "stats":
+                                    if (event.data && data) {
+                                        setData({
+                                            ...data,
+                                            insights: {
+                                                ...data.insights,
+                                                totalWasteEvents: event.data.totalWasteCount,
+                                                totalSavingsPotential: event.data.totalSavingsPotential,
+                                                mostWastedItems: event.data.mostWastedItems,
+                                            },
+                                        });
+                                    }
+                                    break;
+
+                                case "recommendation":
+                                    if (event.data) {
+                                        setStreamingRecommendations((prev) => [...prev, event.data]);
+                                        setGenerationProgress(event.progress || null);
+                                        setGenerationStatus(
+                                            `Generated recommendation for ${event.data.ingredientName}...`
+                                        );
+                                    }
+                                    break;
+
+                                case "summary":
+                                    if (event.data) {
+                                        setData((prev) =>
+                                            prev
+                                                ? {
+                                                      ...prev,
+                                                      insights: {
+                                                          ...prev.insights,
+                                                          ...event.data,
+                                                      },
+                                                      recommendations: streamingRecommendations,
+                                                  }
+                                                : null
+                                        );
+                                    }
+                                    setGenerationStatus("Generation complete!");
+                                    break;
+
+                                case "complete":
+                                    setTimeout(() => {
+                                        setIsGenerating(false);
+                                        setGenerationStatus("");
+                                        setGenerationProgress(null);
+                                        fetchInsights();
+                                    }, 1000);
+                                    break;
+
+                                case "error":
+                                    setGenerationStatus(`Error: ${event.message}`);
+                                    setTimeout(() => setIsGenerating(false), 2000);
+                                    break;
+                            }
+                        } catch (e) {
+                            console.error("Failed to parse event:", e);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error("Error generating insights:", error);
+            setGenerationStatus("Generation failed");
+            setTimeout(() => setIsGenerating(false), 2000);
         }
     };
 
@@ -90,9 +213,15 @@ export default function InsightsPage() {
     if (loading) {
         return (
             <div className="space-y-6">
-                <div>
-                    <h1 className="text-2xl font-bold text-foreground">Shopping Insights</h1>
-                    <p className="text-muted-foreground mt-1">Personalized recommendations to reduce waste</p>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold text-foreground">Shopping Insights</h1>
+                        <p className="text-muted-foreground mt-1">Personalized recommendations to reduce waste</p>
+                    </div>
+                    <Button disabled variant="outline" size="sm">
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                        Refresh
+                    </Button>
                 </div>
 
                 <Card>
@@ -135,10 +264,101 @@ export default function InsightsPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-foreground">Shopping Insights</h1>
-                <p className="text-muted-foreground mt-1">Personalized recommendations to reduce waste</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-foreground">Shopping Insights</h1>
+                    <p className="text-muted-foreground mt-1">Personalized recommendations to reduce waste</p>
+                </div>
+                <div className="flex gap-2">
+                    {data?.cached && (
+                        <Badge variant="outline" className="h-9 px-3">
+                            <Check className="w-3 h-3 mr-1" />
+                            Cached
+                        </Badge>
+                    )}
+                    <Button
+                        onClick={handleGenerateWithStream}
+                        disabled={isGenerating}
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                    >
+                        {isGenerating ? (
+                            <>
+                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                Generating...
+                            </>
+                        ) : (
+                            <>
+                                <Sparkles className="w-4 h-4" />
+                                Regenerate
+                            </>
+                        )}
+                    </Button>
+                </div>
             </div>
+
+            {/* Generation Progress */}
+            {isGenerating && (
+                <Card className="border-primary/50 bg-primary/5">
+                    <CardContent className="pt-6">
+                        <div className="space-y-3">
+                            <div className="flex items-center gap-3">
+                                <RefreshCw className="w-5 h-5 text-primary animate-spin" />
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium text-foreground">{generationStatus}</p>
+                                    {generationProgress && (
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            {generationProgress.current} of {generationProgress.total} recommendations
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                            {generationProgress && (
+                                <Progress
+                                    value={(generationProgress.current / generationProgress.total) * 100}
+                                    className="h-2"
+                                />
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Streaming Recommendations Preview */}
+            {isGenerating && streamingRecommendations.length > 0 && (
+                <div className="space-y-3">
+                    <h3 className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <Sparkles className="w-4 h-4" />
+                        Generating recommendations...
+                    </h3>
+                    {streamingRecommendations.map((rec, index) => (
+                        <Card key={index} className="border-primary/30 animate-in fade-in slide-in-from-bottom-2">
+                            <CardContent className="pt-4">
+                                <div className="flex items-start gap-3">
+                                    <div className={`p-2 rounded-lg ${recommendationColors[rec.recommendationType]}`}>
+                                        {(() => {
+                                            const Icon = recommendationIcons[rec.recommendationType];
+                                            return <Icon className="w-4 h-4" />;
+                                        })()}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="font-medium text-foreground capitalize truncate">
+                                            {rec.ingredientName}
+                                        </h4>
+                                        <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+                                            {rec.suggestion}
+                                        </p>
+                                    </div>
+                                    <Badge variant="secondary" className="text-xs shrink-0">
+                                        New
+                                    </Badge>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            )}
 
             {/* Summary Card */}
             <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-background">

@@ -90,7 +90,7 @@ Keep suggestions practical, culturally relevant, and achievable.`;
                 { role: "user", content: userPrompt },
             ],
             response_format: { type: "json_object" },
-            temperature: 0.7,
+            // temperature: 0.7, temperature for 5 mini is fixed at 1
         });
 
         const content = response.choices[0]?.message?.content || "{}";
@@ -164,8 +164,8 @@ Write 2-3 sentences that are encouraging and actionable.`;
                 { role: "system", content: systemPrompt },
                 { role: "user", content: userPrompt },
             ],
-            temperature: 0.8,
-            max_completion_tokens: 150,
+            // temperature: 1, temperature for 5 mini is fixed at 1
+            max_completion_tokens: 2000,
         });
 
         return (
