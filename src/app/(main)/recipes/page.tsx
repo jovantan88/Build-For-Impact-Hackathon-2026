@@ -9,9 +9,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ChefHat, Clock, Users, ShoppingCart, Check, RefreshCw, Sparkles, ExternalLink, Search, ImageIcon } from "lucide-react";
+import { ChefHat, Clock, Users, ShoppingCart, Check, RefreshCw, Sparkles, ExternalLink, Search, ImageIcon, Mic } from "lucide-react";
 import { toast } from "sonner";
 import { MODEL_KEYS, MODEL_DISPLAY_NAMES } from "@/lib/ai/models";
+import { ConverseDialog } from "@/components/converse-dialog";
 
 interface RecipeIngredient {
     name: string;
@@ -89,6 +90,7 @@ export default function RecipesPage() {
     const [generatingImageFor, setGeneratingImageFor] = useState<string | null>(null);
     const [streamingText, setStreamingText] = useState<string>("");
     const [isStreaming, setIsStreaming] = useState(false);
+    const [converseDialogOpen, setConverseDialogOpen] = useState(false);
     const abortControllerRef = useRef<AbortController | null>(null);
 
     const fetchRecipesStreaming = useCallback(async (mode: "cook_now" | "buy_more", seaLion: boolean, forceRefresh = false) => {
@@ -225,6 +227,14 @@ export default function RecipesPage() {
 
     const handleModelToggle = (checked: boolean) => {
         setUseSeaLion(checked);
+    };
+
+    const handleConverseRecipes = (newRecipes: Recipe[], newSearchResults: SearchResult[], modelUsed: string) => {
+        setRecipes(newRecipes);
+        setSearchResults(newSearchResults);
+        setCurrentModel(modelUsed + " (voice)");
+        setLoading(false);
+        setIsStreaming(false);
     };
 
     const handleGenerateImage = useCallback(async (recipe: Recipe, showToast = true) => {
@@ -433,6 +443,21 @@ export default function RecipesPage() {
                         <span className={`text-sm ${useSeaLion ? "font-medium" : "text-muted-foreground"}`}>{MODEL_DISPLAY_NAMES.SEA_LION_SHORT}</span>
                     </div>
                 </div>
+                <div className="flex items-center justify-between mt-3 pt-3 border-t">
+                    <div className="flex items-center gap-2">
+                        <Mic className="w-4 h-4 text-primary" />
+                        <span className="text-sm text-muted-foreground">Describe what you want to cook</span>
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setConverseDialogOpen(true)}
+                        disabled={loading || isStreaming}
+                    >
+                        <Mic className="w-4 h-4 mr-2" />
+                        Converse
+                    </Button>
+                </div>
                 {currentModel && <p className="text-xs text-muted-foreground mt-2">Last generated with: {currentModel}</p>}
             </Card>
 
@@ -634,6 +659,14 @@ export default function RecipesPage() {
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Converse Dialog */}
+            <ConverseDialog
+                open={converseDialogOpen}
+                onOpenChange={setConverseDialogOpen}
+                useSeaLion={useSeaLion}
+                onRecipesGenerated={handleConverseRecipes}
+            />
         </div>
     );
 }
