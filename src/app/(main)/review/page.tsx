@@ -138,7 +138,7 @@ export default function ReviewPage() {
   if (!data) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="animate-pulse">Loading...</div>
+        <div className="animate-pulse text-gray-300">Loading...</div>
       </div>
     );
   }
@@ -146,8 +146,8 @@ export default function ReviewPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Review Items</h1>
-        <p className="text-gray-600">
+        <h1 className="text-2xl font-bold text-gray-100">Review Items</h1>
+        <p className="text-gray-400">
           We found {ingredients.length} ingredients. Edit or remove as needed.
         </p>
       </div>
@@ -171,13 +171,13 @@ export default function ReviewPage() {
         </CardHeader>
         <CardContent>
           {ingredients.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">No ingredients yet</p>
+            <p className="text-gray-400 text-center py-8">No ingredients yet</p>
           ) : (
             <div className="space-y-2">
               {ingredients.map((item) => (
                 <div
                   key={item.tempId}
-                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg group"
+                  className="flex items-center gap-3 p-3 bg-gray-800 rounded-lg group border border-gray-700"
                 >
                   {editingId === item.tempId ? (
                     <>
@@ -224,9 +224,9 @@ export default function ReviewPage() {
                         className="flex-1 cursor-pointer"
                         onClick={() => setEditingId(item.tempId)}
                       >
-                        <p className="font-medium">{item.name}</p>
+                        <p className="font-medium text-gray-100">{item.name}</p>
                         {(item.quantity || item.unit) && (
-                          <p className="text-sm text-gray-500">
+                          <p className="text-sm text-gray-400">
                             {item.quantity} {item.unit}
                           </p>
                         )}
