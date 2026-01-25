@@ -2,11 +2,12 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { Refrigerator, Upload, ChefHat, Lightbulb } from "lucide-react";
+import { Refrigerator, Upload, ChefHat, Lightbulb, Sparkles } from "lucide-react";
 
 const navItems = [
   { href: "/upload", icon: Upload, label: "Upload" },
   { href: "/fridge", icon: Refrigerator, label: "Fridge" },
+  { href: "/discover", icon: Sparkles, label: "Discover" },
   { href: "/recipes", icon: ChefHat, label: "Recipes" },
   { href: "/insights", icon: Lightbulb, label: "Insights" },
 ];

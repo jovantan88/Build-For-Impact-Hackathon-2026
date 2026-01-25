@@ -163,39 +163,6 @@ async function callOpenAI(messages: { role: string; content: string }[]): Promis
     return response.choices[0]?.message?.content || "{}";
 }
 
-async function generateRecipeImage(title: string): Promise<string | undefined> {
-  if (!genai) {
-    return undefined;
-  }
-
-  try {
-    const response = await genai.models.generateContent({
-      model: "gemini-2.0-flash-exp-image-generation",
-      contents: `Generate a realistic, high-quality food photograph of "${title}".
-The image must look like real food photography, not illustration or CGI.
-- plated and appetizing, centered composition
-- natural lighting, shallow depth of field
-- clean, minimal background with no text or people
-- landscape orientation (wide, ~3:2 aspect ratio)`,
-      config: {
-        responseModalities: [Modality.TEXT, Modality.IMAGE],
-      },
-    });
-
-    if (response.candidates && response.candidates[0]?.content?.parts) {
-      for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-        }
-      }
-    }
-  } catch (error) {
-    console.error("Failed to generate recipe image:", error);
-  }
-
-  return undefined;
-}
-
 interface GenerateRecipesResult {
     recipes: Recipe[];
     modelUsed: string;
