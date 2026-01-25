@@ -136,7 +136,7 @@ export default function ExpiryPage() {
 
             {!isComplete ? (
                 <Card className="overflow-hidden border-amber-500/30">
-                    <CardHeader className="bg-gradient-to-r from-amber-950/50 to-orange-950/50">
+                    <CardHeader>
                         <CardTitle className="text-xl flex items-center gap-2">
                             <Calendar className="w-5 h-5 text-amber-500" />
                             {currentItem.name}
@@ -177,7 +177,7 @@ export default function ExpiryPage() {
                 </Card>
             ) : (
                 <Card className="overflow-hidden border-emerald-500/30">
-                    <CardHeader className="bg-gradient-to-r from-emerald-950/50 to-green-950/50">
+                    <CardHeader>
                         <CardTitle className="text-xl flex items-center gap-2 text-emerald-400">
                             <Check className="w-5 h-5" />
                             All Set!
