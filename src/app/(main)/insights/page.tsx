@@ -361,7 +361,7 @@ export default function InsightsPage() {
             )}
 
             {/* Summary Card */}
-            <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-background">
+            <Card>
                 <CardContent className="pt-6">
                     <div className="flex items-start gap-4">
                         <div className="bg-primary/10 p-3 rounded-full">

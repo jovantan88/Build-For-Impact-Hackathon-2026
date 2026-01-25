@@ -155,33 +155,33 @@ The image should be:
 export async function generateFoodImage(dishName: string, cuisineStyle: string[] = []): Promise<string> {
     const cuisineDesc = cuisineStyle.length > 0 ? cuisineStyle.join(", ") : "Southeast Asian";
 
-    // Use Gemini for food image generation
-    const response = await genai.models.generateContent({
-        model: GEMINI_MODELS.IMAGE_GENERATION,
-        contents: `Generate a beautiful, appetizing photograph of ${dishName}, a ${cuisineDesc} dish.
-The image should be:
-- Professional food photography style
-- Served on an appropriate plate or bowl
-- Garnished beautifully
-- Warm, inviting lighting
-- Shallow depth of field
-- Top-down or 45-degree angle view
-- High resolution and realistic
-- Makes the viewer hungry`,
-        config: {
-            responseModalities: [Modality.TEXT, Modality.IMAGE],
-        },
-    });
+    const prompt = `A beautiful, appetizing professional photograph of ${dishName}, a ${cuisineDesc} dish. Professional food photography style, served on an appropriate plate or bowl, beautifully garnished, warm inviting lighting, shallow depth of field, top-down or 45-degree angle view, high resolution and realistic, makes the viewer hungry. Food must be in the middle of the frame.`;
 
-    // Extract image from response
-    if (response.candidates && response.candidates[0]?.content?.parts) {
-        for (const part of response.candidates[0].content.parts) {
-            if (part.inlineData) {
-                // Return as base64 data URL
-                return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-            }
+    // Use Cloudflare AI for fast image generation
+    const response = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell`,
+        {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                prompt,
+                num_steps: 4, // Fast generation with flux-1-schnell
+            }),
         }
+    );
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Cloudflare AI error: ${response.statusText} - ${errorText}`);
     }
 
-    throw new Error("No image generated");
+    // Cloudflare returns the image as binary data directly
+    const blob = await response.blob();
+    const arrayBuffer = await blob.arrayBuffer();
+    const base64Image = Buffer.from(arrayBuffer).toString("base64");
+    
+    return `data:image/png;base64,${base64Image}`;
 }

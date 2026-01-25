@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ChefHat, Clock, Users, ShoppingCart, Check, RefreshCw, Sparkles, ExternalLink, Search, ImageIcon, Mic } from "lucide-react";
+import { ChefHat, Clock, Users, ShoppingCart, Check, RefreshCw, Sparkles, Mic } from "lucide-react";
 import { toast } from "sonner";
 import { MODEL_KEYS, MODEL_DISPLAY_NAMES } from "@/lib/ai/models";
 import { ConverseDialog } from "@/components/converse-dialog";
@@ -237,8 +237,8 @@ export default function RecipesPage() {
         setIsStreaming(false);
     };
 
-    const handleGenerateImage = useCallback(async (recipe: Recipe, showToast = true) => {
-        setGeneratingImageFor(recipe.id);
+    const handleGenerateImage = useCallback(async (recipe: Recipe) => {
+        console.log(`Generating image for: ${recipe.title}`);
         try {
             const res = await fetch("/api/recipes/image", {
                 method: "POST",
@@ -249,47 +249,63 @@ export default function RecipesPage() {
                 }),
             });
 
+            if (!res.ok) {
+                const errorText = await res.text();
+                console.error(`Image API error for ${recipe.title}:`, res.status, errorText);
+                return;
+            }
+
             const data = await res.json();
 
-            if (res.ok && data.imageUrl) {
+            if (data.imageUrl) {
+                console.log(`Image generated successfully for: ${recipe.title}`);
                 setRecipes((prevRecipes) => prevRecipes.map((r) => (r.id === recipe.id ? { ...r, imageUrl: data.imageUrl } : r)));
                 setSelectedRecipe((prev) => (prev?.id === recipe.id ? { ...prev, imageUrl: data.imageUrl } : prev));
-                if (showToast) {
-                    toast.success("Image generated!");
-                }
-            } else if (showToast) {
-                toast.error("Failed to generate image");
+            } else {
+                console.error(`No imageUrl in response for ${recipe.title}:`, data);
             }
-        } catch {
-            if (showToast) {
-                toast.error("Failed to generate image");
-            }
-        } finally {
-            setGeneratingImageFor(null);
+        } catch (error) {
+            console.error(`Failed to generate image for ${recipe.title}:`, error);
         }
     }, []);
 
     // Track which recipe IDs we've already started generating images for
     const generatingImagesRef = useRef<Set<string>>(new Set());
 
-    // Automatically generate images for recipes without images
+    // Automatically generate images for all recipes in parallel when ready
     useEffect(() => {
         const generateMissingImages = async () => {
+            // Wait for loading to complete
             if (isStreaming || loading) return;
+            
+            // Need recipes to exist
+            if (recipes.length === 0) return;
 
             const recipesWithoutImages = recipes.filter((r) => !r.imageUrl && !generatingImagesRef.current.has(r.id));
             if (recipesWithoutImages.length === 0) return;
 
-            // Generate images one at a time to avoid overwhelming the API
-            for (const recipe of recipesWithoutImages) {
-                if (!recipe.imageUrl && !generatingImagesRef.current.has(recipe.id)) {
-                    generatingImagesRef.current.add(recipe.id);
-                    await handleGenerateImage(recipe, false);
-                }
-            }
+            console.log(`Auto-generating images for ${recipesWithoutImages.length} recipes...`);
+
+            // Mark all as generating
+            recipesWithoutImages.forEach(recipe => generatingImagesRef.current.add(recipe.id));
+            setGeneratingImageFor("all");
+
+            // Generate all images in parallel for faster loading
+            const results = await Promise.allSettled(
+                recipesWithoutImages.map(recipe => handleGenerateImage(recipe))
+            );
+
+            console.log(`Image generation complete. Success: ${results.filter(r => r.status === 'fulfilled').length}, Failed: ${results.filter(r => r.status === 'rejected').length}`);
+
+            setGeneratingImageFor(null);
         };
 
-        generateMissingImages();
+        // Use setTimeout to ensure this runs after the component has fully updated
+        const timeout = setTimeout(() => {
+            generateMissingImages();
+        }, 100);
+
+        return () => clearTimeout(timeout);
     }, [recipes, isStreaming, loading, handleGenerateImage]);
 
     // Clear the ref when recipes change entirely (e.g., tab switch or refresh)
@@ -304,32 +320,15 @@ export default function RecipesPage() {
                     <img src={recipe.imageUrl} alt={recipe.title} className="w-full h-full object-cover" />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center">
-                        <ChefHat className="w-12 h-12 text-amber-300" />
-                    </div>
-                )}
-                {!recipe.imageUrl && (
-                    <Button
-                        size="sm"
-                        variant="secondary"
-                        className="absolute bottom-2 right-2 text-xs"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleGenerateImage(recipe);
-                        }}
-                        disabled={generatingImageFor === recipe.id}
-                    >
-                        {generatingImageFor === recipe.id ? (
-                            <>
-                                <div className="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-1" />
-                                Generating...
-                            </>
+                        {generatingImageFor === "all" ? (
+                            <div className="flex flex-col items-center gap-2">
+                                <div className="w-8 h-8 border-3 border-amber-300 border-t-transparent rounded-full animate-spin" />
+                                <span className="text-xs text-amber-600">Generating...</span>
+                            </div>
                         ) : (
-                            <>
-                                <ImageIcon className="w-3 h-3 mr-1" />
-                                Generate
-                            </>
+                            <ChefHat className="w-12 h-12 text-amber-300" />
                         )}
-                    </Button>
+                    </div>
                 )}
             </div>
             <CardHeader className="pb-2">
@@ -387,29 +386,18 @@ export default function RecipesPage() {
         </Card>
     );
 
-    const SearchResultCard = ({ result, index }: { result: SearchResult; index: number }) => (
-        <Card
-            className="animate-in fade-in slide-in-from-bottom-4 duration-500 bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800"
-            style={{ animationDelay: `${index * 100}ms` }}
-        >
-            <CardContent className="p-3">
-                <div className="flex items-start gap-2">
-                    <Search className="w-4 h-4 text-blue-500 dark:text-blue-400 mt-0.5 flex-shrink-0" />
-                    <div className="flex-1 min-w-0">
-                        <a
-                            href={result.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="font-medium text-sm text-blue-700 dark:text-blue-400 hover:underline line-clamp-1 flex items-center gap-1"
-                        >
-                            {result.title}
-                            <ExternalLink className="w-3 h-3" />
-                        </a>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{result.text}</p>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+    const SearchResultText = ({ result }: { result: SearchResult }) => (
+        <div className="flex items-start gap-2 text-sm">
+            <span className="text-muted-foreground">•</span>
+            <a
+                href={result.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 dark:text-blue-400 hover:underline"
+            >
+                {result.title}
+            </a>
+        </div>
     );
 
     return (
@@ -461,16 +449,15 @@ export default function RecipesPage() {
                 {currentModel && <p className="text-xs text-muted-foreground mt-2">Last generated with: {currentModel}</p>}
             </Card>
 
-            {/* Search Results - Floating Cards */}
+            {/* Search Results - Text List */}
             {searchResults.length > 0 && (
-                <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Search className="w-4 h-4" />
-                        <span>Recipe inspirations from the web</span>
+                <div className="space-y-2 pb-2">
+                    <div className="text-sm text-muted-foreground">
+                        Similar recipes found online:
                     </div>
-                    <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
-                        {searchResults.map((result, index) => (
-                            <SearchResultCard key={result.url} result={result} index={index} />
+                    <div className="flex flex-wrap gap-x-6 gap-y-1">
+                        {searchResults.map((result) => (
+                            <SearchResultText key={result.url} result={result} />
                         ))}
                     </div>
                 </div>
@@ -555,26 +542,15 @@ export default function RecipesPage() {
                                 {selectedRecipe.imageUrl ? (
                                     <img src={selectedRecipe.imageUrl} alt={selectedRecipe.title} className="w-full h-full object-cover" />
                                 ) : (
-                                    <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-                                        <ChefHat className="w-16 h-16 text-amber-300" />
-                                        <Button
-                                            size="sm"
-                                            variant="secondary"
-                                            onClick={() => handleGenerateImage(selectedRecipe)}
-                                            disabled={generatingImageFor === selectedRecipe.id}
-                                        >
-                                            {generatingImageFor === selectedRecipe.id ? (
-                                                <>
-                                                    <div className="w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full animate-spin mr-2" />
-                                                    Generating Image...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <ImageIcon className="w-4 h-4 mr-2" />
-                                                    Generate Image
-                                                </>
-                                            )}
-                                        </Button>
+                                    <div className="w-full h-full flex items-center justify-center">
+                                        {generatingImageFor === "all" ? (
+                                            <div className="flex flex-col items-center gap-2">
+                                                <div className="w-12 h-12 border-3 border-amber-300 border-t-transparent rounded-full animate-spin" />
+                                                <span className="text-sm text-amber-600">Generating image...</span>
+                                            </div>
+                                        ) : (
+                                            <ChefHat className="w-16 h-16 text-amber-300" />
+                                        )}
                                     </div>
                                 )}
                             </div>
