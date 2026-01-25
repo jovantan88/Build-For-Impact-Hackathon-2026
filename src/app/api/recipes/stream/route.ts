@@ -48,14 +48,45 @@ export async function GET(request: NextRequest) {
     // Create a streaming response
     const encoder = new TextEncoder();
 
+    // Track controller state to prevent "Controller is already closed" errors
+    let isControllerClosed = false;
+
     const stream = new ReadableStream({
         async start(controller) {
+            // Safe enqueue function that checks if controller is still open
+            const safeEnqueue = (data: string) => {
+                if (!isControllerClosed) {
+                    try {
+                        controller.enqueue(encoder.encode(data));
+                    } catch (e) {
+                        // Controller was closed, update our flag
+                        isControllerClosed = true;
+                        console.warn("Controller closed during enqueue:", e);
+                    }
+                }
+            };
+
+            // Safe close function
+            const safeClose = () => {
+                if (!isControllerClosed) {
+                    isControllerClosed = true;
+                    try {
+                        controller.close();
+                    } catch (e) {
+                        console.warn("Controller already closed:", e);
+                    }
+                }
+            };
+
             try {
                 // Step 1: Send search results first
-                controller.enqueue(encoder.encode(`event: search_start\ndata: {}\n\n`));
+                safeEnqueue(`event: search_start\ndata: {}\n\n`);
 
                 const searchResults = await searchRecipesForClient(allIngredients);
-                controller.enqueue(encoder.encode(`event: search_results\ndata: ${JSON.stringify(searchResults)}\n\n`));
+
+                if (isControllerClosed) return;
+
+                safeEnqueue(`event: search_results\ndata: ${JSON.stringify(searchResults)}\n\n`);
 
                 // Build prompts
                 const recipeContext =
@@ -90,7 +121,9 @@ JSON format: ${recipeFormat}`;
                 ];
 
                 // Step 2: Stream recipe generation
-                controller.enqueue(encoder.encode(`event: generation_start\ndata: {"model":"${model}"}\n\n`));
+                if (isControllerClosed) return;
+
+                safeEnqueue(`event: generation_start\ndata: {"model":"${model}"}\n\n`);
 
                 let fullResponse = "";
                 let modelUsed = "";
@@ -123,36 +156,47 @@ JSON format: ${recipeFormat}`;
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
 
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
+                    try {
+                        while (!isControllerClosed) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
 
-                        const chunk = decoder.decode(value, { stream: true });
-                        const lines = chunk.split("\n");
+                            const chunk = decoder.decode(value, { stream: true });
+                            const lines = chunk.split("\n");
 
-                        for (const line of lines) {
-                            if (line.startsWith("data: ")) {
-                                const data = line.slice(6);
-                                if (data === "[DONE]") continue;
+                            for (const line of lines) {
+                                if (isControllerClosed) break;
 
-                                try {
-                                    const parsed = JSON.parse(data);
-                                    const content = parsed.response || parsed.choices?.[0]?.delta?.content || "";
-                                    if (content) {
-                                        fullResponse += content;
-                                        controller.enqueue(encoder.encode(`event: chunk\ndata: ${JSON.stringify({ content })}\n\n`));
+                                if (line.startsWith("data: ")) {
+                                    const data = line.slice(6);
+                                    if (data === "[DONE]") continue;
+
+                                    try {
+                                        const parsed = JSON.parse(data);
+                                        const content = parsed.response || parsed.choices?.[0]?.delta?.content || "";
+                                        if (content) {
+                                            fullResponse += content;
+                                            safeEnqueue(`event: chunk\ndata: ${JSON.stringify({ content })}\n\n`);
+                                        }
+                                    } catch {
+                                        // Skip unparseable chunks
                                     }
-                                } catch {
-                                    // Skip unparseable chunks
                                 }
                             }
+                        }
+                    } finally {
+                        // Always release the reader
+                        try {
+                            reader.releaseLock();
+                        } catch {
+                            // Reader may already be released
                         }
                     }
                 } else {
                     // Use OpenAI streaming
                     modelUsed = MODEL_DISPLAY_NAMES.GPT_WITH_SEARCH;
 
-                    const stream = await openai.chat.completions.create({
+                    const openaiStream = await openai.chat.completions.create({
                         model: OPENAI_MODELS.GPT_5_MINI,
                         messages: messages.map((m) => ({
                             role: m.role as "system" | "user" | "assistant",
@@ -162,16 +206,20 @@ JSON format: ${recipeFormat}`;
                         stream: true,
                     });
 
-                    for await (const chunk of stream) {
+                    for await (const chunk of openaiStream) {
+                        if (isControllerClosed) break;
+
                         const content = chunk.choices[0]?.delta?.content || "";
                         if (content) {
                             fullResponse += content;
-                            controller.enqueue(encoder.encode(`event: chunk\ndata: ${JSON.stringify({ content })}\n\n`));
+                            safeEnqueue(`event: chunk\ndata: ${JSON.stringify({ content })}\n\n`);
                         }
                     }
                 }
 
                 // Step 3: Parse and send final result
+                if (isControllerClosed) return;
+
                 let recipes = [];
                 try {
                     let jsonStr = fullResponse.trim();
@@ -186,21 +234,23 @@ JSON format: ${recipeFormat}`;
                     console.error("Parse error:", e);
                 }
 
-                controller.enqueue(
-                    encoder.encode(
-                        `event: complete\ndata: ${JSON.stringify({
-                            recipes,
-                            modelUsed,
-                            searchResults,
-                        })}\n\n`,
-                    ),
+                safeEnqueue(
+                    `event: complete\ndata: ${JSON.stringify({
+                        recipes,
+                        modelUsed,
+                        searchResults,
+                    })}\n\n`,
                 );
             } catch (error) {
                 console.error("Stream error:", error);
-                controller.enqueue(encoder.encode(`event: error\ndata: ${JSON.stringify({ error: "Generation failed" })}\n\n`));
+                safeEnqueue(`event: error\ndata: ${JSON.stringify({ error: "Generation failed" })}\n\n`);
             } finally {
-                controller.close();
+                safeClose();
             }
+        },
+        cancel() {
+            // Called when the client disconnects
+            isControllerClosed = true;
         },
     });
 

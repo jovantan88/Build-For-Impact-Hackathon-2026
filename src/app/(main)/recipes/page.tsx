@@ -451,17 +451,6 @@ export default function RecipesPage() {
                 </div>
             )}
 
-            {/* Streaming Text Preview */}
-            {isStreaming && streamingText && (
-                <Card className="p-4 bg-muted">
-                    <div className="flex items-center gap-2 mb-2">
-                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
-                        <span className="text-sm font-medium text-foreground">Generating recipes...</span>
-                    </div>
-                    <pre className="text-xs text-muted-foreground whitespace-pre-wrap max-h-32 overflow-y-auto font-mono">{streamingText.slice(-500)}</pre>
-                </Card>
-            )}
-
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "cook_now" | "buy_more")}>
                 <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="cook_now" className="flex items-center gap-2">
@@ -520,6 +509,17 @@ export default function RecipesPage() {
                     )}
                 </TabsContent>
             </Tabs>
+
+            {/* Streaming Text Preview */}
+            {isStreaming && streamingText && (
+                <Card className="p-4 bg-muted">
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="w-2 h-2 bg-primary rounded-full animate-pulse" />
+                        <span className="text-sm font-medium text-foreground">Generating recipes...</span>
+                    </div>
+                    <pre className="text-xs text-muted-foreground whitespace-pre-wrap max-h-32 overflow-y-auto font-mono">{streamingText.slice(-500)}</pre>
+                </Card>
+            )}
 
             {/* Recipe Detail Dialog */}
             <Dialog open={!!selectedRecipe} onOpenChange={() => setSelectedRecipe(null)}>
