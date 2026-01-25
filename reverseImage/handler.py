@@ -72,15 +72,15 @@ def load_model():
     if model is None:
         print("Loading Qwen2.5-VL-7B-Instruct model...")
 
-        model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            "Qwen/Qwen2.5-VL-7B-Instruct",
+        model = Qwen3VLForConditionalGeneration.from_pretrained(
+            "aisingapore/Qwen-SEA-LION-v4-8B-VL",
             torch_dtype=torch.bfloat16,
             device_map="auto",
             trust_remote_code=True,
         )
 
         processor = AutoProcessor.from_pretrained(
-            "Qwen/Qwen2.5-VL-7B-Instruct",
+            "aisingapore/Qwen-SEA-LION-v4-8B-VL",
             trust_remote_code=True,
         )
 
