@@ -337,32 +337,35 @@ function ItemDialog({
 }) {
     return (
         <Dialog open={!!item} onOpenChange={onClose}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-md bg-gradient-to-b from-slate-50 to-slate-100 border-slate-300">
                 {item && (
                     <>
                         <DialogHeader>
-                            <DialogTitle className="text-xl flex items-center justify-between">
+                            <DialogTitle className="text-xl flex items-center justify-between text-slate-900">
                                 {item.name}
                                 {badge}
                             </DialogTitle>
-                            <DialogDescription>{item.quantity ? `${item.quantity} ${item.unit || ""}` : "In stock"}</DialogDescription>
+                            <DialogDescription className="text-slate-600">
+                                {item.quantity ? `${item.quantity} ${item.unit || ""}` : "In stock"}
+                            </DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4">
-                            <div className="aspect-video bg-slate-100 rounded-lg flex items-center justify-center overflow-hidden border relative group">
+                            <div className="aspect-video bg-white/60 rounded-lg flex items-center justify-center overflow-hidden border border-slate-200 relative group">
                                 {item.image_url ? (
                                     <img src={item.image_url} alt={item.name} className="w-full h-full object-cover" />
                                 ) : (
                                     <div className="flex flex-col items-center gap-3">
-                                        <div className="p-4 bg-white rounded-full shadow-sm">
+                                        <div className="p-4 rounded-full shadow-sm bg-slate-100">
                                             {isGenerating ? (
                                                 <Sparkles className="w-6 h-6 animate-spin text-amber-500" />
                                             ) : (
-                                                <ImageIcon className="w-6 h-6 text-slate-400" />
+                                                <ImageIcon className="w-6 h-6 text-slate-600" />
                                             )}
                                         </div>
                                         <Button
                                             variant="outline"
                                             size="sm"
+                                            className="bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 onGenerateImage(item.id);
@@ -378,7 +381,9 @@ function ItemDialog({
                                 <div
                                     className={cn(
                                         "p-3 rounded-lg border text-sm flex gap-3",
-                                        nudge.intent === "urgent" ? "bg-red-50 border-red-100 text-red-700" : "bg-blue-50 border-blue-100 text-blue-700",
+                                        nudge.intent === "urgent"
+                                            ? "bg-red-50 border-red-200 text-red-700"
+                                            : "bg-emerald-50 border-emerald-200 text-emerald-700",
                                     )}
                                 >
                                     <ChefHat className="w-5 h-5 shrink-0" />
@@ -389,7 +394,7 @@ function ItemDialog({
                                 </div>
                             )}
                             {item.expiry_date && (
-                                <div className="flex items-center gap-2 text-sm text-muted-foreground p-2 bg-slate-50 rounded">
+                                <div className="flex items-center gap-2 text-sm text-slate-600 p-2 bg-white/50 border border-slate-200 rounded">
                                     <Clock className="w-4 h-4" />
                                     <span>
                                         Expires: {new Date(item.expiry_date).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
@@ -399,7 +404,7 @@ function ItemDialog({
                             <div className="flex gap-2 pt-2">
                                 <Button variant="destructive" className="flex-1" onClick={() => onDelete(item.id)}>
                                     <Trash2 className="w-4 h-4 mr-2" />
-                                    Consume / Remove
+                                    Consumed / Remove
                                 </Button>
                             </div>
                         </div>

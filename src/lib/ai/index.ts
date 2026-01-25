@@ -125,11 +125,12 @@ export async function generateIngredientImage(ingredientName: string): Promise<s
     // Use Gemini for image generation
     const response = await genai.models.generateContent({
         model: GEMINI_MODELS.IMAGE_GENERATION,
-        contents: `Generate a clean, appetizing photograph of ${ingredientName}.
+        contents: `Generate a clean, appetizing photograph of ${ingredientName} (ingredient).
 The image should be:
 - On a clean white or light background
 - Food photography style
 - High quality and realistic
+- In packaging
 - Centered composition
 - Well-lit and appetizing
 - Square orientation (1:1 aspect ratio)`,
