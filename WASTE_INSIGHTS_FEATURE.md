@@ -168,3 +168,4 @@ For issues or questions:
 2. Verify OpenAI API key is configured
 3. Check browser console for errors
 4. Review Supabase logs for RPC function errors
+  
