@@ -3,26 +3,28 @@ import { GoogleGenAI, Modality } from "@google/genai";
 import { OPENAI_MODELS, GEMINI_MODELS } from "./models";
 
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY,
 });
 
 const genai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export interface ExtractedItem {
-    name: string;
-    quantity?: number;
-    unit?: string;
-    isIngredient: boolean;
-    category?: string;
+  name: string;
+  quantity?: number;
+  unit?: string;
+  isIngredient: boolean;
+  category?: string;
 }
 
-export async function extractReceiptItems(imageBase64: string): Promise<ExtractedItem[]> {
-    const response = await openai.chat.completions.create({
-        model: OPENAI_MODELS.GPT_5_MINI,
-        messages: [
-            {
-                role: "system",
-                content: `You are an expert at reading grocery receipts and extracting items.
+export async function extractReceiptItems(
+  imageBase64: string,
+): Promise<ExtractedItem[]> {
+  const response = await openai.chat.completions.create({
+    model: OPENAI_MODELS.GPT_5_MINI,
+    messages: [
+      {
+        role: "system",
+        content: `You are an expert at reading grocery receipts and extracting items.
 Your task is to:
 1. Extract all items from the receipt
 2. Identify the quantity and unit if visible
@@ -44,43 +46,45 @@ Return a JSON array of items with this structure:
 Focus on Southeast Asian grocery items but handle any items you see.
 Clean up abbreviated names to full readable names.
 If quantity isn't clear, leave it null.`,
+      },
+      {
+        role: "user",
+        content: [
+          {
+            type: "image_url",
+            image_url: {
+              url: `data:image/jpeg;base64,${imageBase64}`,
             },
-            {
-                role: "user",
-                content: [
-                    {
-                        type: "image_url",
-                        image_url: {
-                            url: `data:image/jpeg;base64,${imageBase64}`,
-                        },
-                    },
-                    {
-                        type: "text",
-                        text: "Extract all items from this receipt. Return only valid JSON.",
-                    },
-                ],
-            },
+          },
+          {
+            type: "text",
+            text: "Extract all items from this receipt. Return only valid JSON.",
+          },
         ],
-        max_completion_tokens: 4000,
-        response_format: { type: "json_object" },
-    });
+      },
+    ],
+    max_completion_tokens: 4000,
+    response_format: { type: "json_object" },
+  });
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-        throw new Error("No response from AI");
-    }
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error("No response from AI");
+  }
 
-    const parsed = JSON.parse(content);
-    return parsed.items || [];
+  const parsed = JSON.parse(content);
+  return parsed.items || [];
 }
 
-export async function classifyExpiryItems(items: string[]): Promise<{ name: string; needsExpiry: boolean }[]> {
-    const response = await openai.chat.completions.create({
-        model: OPENAI_MODELS.GPT_5_MINI,
-        messages: [
-            {
-                role: "system",
-                content: `You classify grocery items by whether they typically expire quickly and need expiry date tracking.
+export async function classifyExpiryItems(
+  items: string[],
+): Promise<{ name: string; needsExpiry: boolean }[]> {
+  const response = await openai.chat.completions.create({
+    model: OPENAI_MODELS.GPT_5_MINI,
+    messages: [
+      {
+        role: "system",
+        content: `You classify grocery items by whether they typically expire quickly and need expiry date tracking.
 
 Items that need expiry tracking (return true):
 - Fresh produce (vegetables, fruits, herbs)
@@ -103,29 +107,31 @@ Items that DON'T need expiry tracking (return false):
 - Coffee, tea
 
 Return JSON: { "items": [{ "name": "item name", "needsExpiry": boolean }] }`,
-            },
-            {
-                role: "user",
-                content: `Classify these items: ${JSON.stringify(items)}`,
-            },
-        ],
-        response_format: { type: "json_object" },
-    });
+      },
+      {
+        role: "user",
+        content: `Classify these items: ${JSON.stringify(items)}`,
+      },
+    ],
+    response_format: { type: "json_object" },
+  });
 
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-        return items.map((name) => ({ name, needsExpiry: false }));
-    }
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    return items.map((name) => ({ name, needsExpiry: false }));
+  }
 
-    const parsed = JSON.parse(content);
-    return parsed.items || [];
+  const parsed = JSON.parse(content);
+  return parsed.items || [];
 }
 
-export async function generateIngredientImage(ingredientName: string): Promise<string> {
-    // Use Gemini for image generation
-    const response = await genai.models.generateContent({
-        model: GEMINI_MODELS.IMAGE_GENERATION,
-        contents: `Generate a clean, appetizing photograph of ${ingredientName} (ingredient).
+export async function generateIngredientImage(
+  ingredientName: string,
+): Promise<string> {
+  // Use Gemini for image generation
+  const response = await genai.models.generateContent({
+    model: GEMINI_MODELS.IMAGE_GENERATION,
+    contents: `Generate a clean, appetizing photograph of ${ingredientName} (ingredient).
 The image should be:
 - On a clean white or light background
 - Food photography style
@@ -134,54 +140,51 @@ The image should be:
 - Centered composition
 - Well-lit and appetizing
 - Square orientation (1:1 aspect ratio)`,
-        config: {
-            responseModalities: [Modality.TEXT, Modality.IMAGE],
-        },
-    });
+    config: {
+      responseModalities: [Modality.TEXT, Modality.IMAGE],
+    },
+  });
 
-    // Extract image from response
-    if (response.candidates && response.candidates[0]?.content?.parts) {
-        for (const part of response.candidates[0].content.parts) {
-            if (part.inlineData) {
-                // Return as base64 data URL
-                return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-            }
-        }
+  // Extract image from response
+  if (response.candidates && response.candidates[0]?.content?.parts) {
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        // Return as base64 data URL
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
     }
+  }
 
-    throw new Error("No image generated");
+  throw new Error("No image generated");
 }
 
-export async function generateFoodImage(dishName: string, cuisineStyle: string[] = []): Promise<string> {
-    const cuisineDesc = cuisineStyle.length > 0 ? cuisineStyle.join(", ") : "Southeast Asian";
+export async function generateFoodImage(
+  dishName: string,
+  cuisineStyle: string[] = [],
+): Promise<string> {
+  const cuisineDesc =
+    cuisineStyle.length > 0 ? cuisineStyle.join(", ") : "Southeast Asian";
 
-    const prompt = `A beautiful, appetizing professional photograph of ${dishName}, a ${cuisineDesc} dish. Professional food photography style, served on an appropriate plate or bowl, beautifully garnished, warm inviting lighting, shallow depth of field, top-down or 45-degree angle view, high resolution and realistic, makes the viewer hungry. Food must be in the middle of the frame.`;
+  const prompt = `A beautiful, appetizing professional photograph of ${dishName}, a ${cuisineDesc} dish. Professional food photography style, served on an appropriate plate or bowl, beautifully garnished, warm inviting lighting, shallow depth of field, top-down or 45-degree angle view, high resolution and realistic, makes the viewer hungry. Food must be in the middle of the frame.`;
 
-    // Use Cloudflare AI for fast image generation
-    const response = await fetch(
-        `https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/black-forest-labs/flux-1-schnell`,
-        {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                prompt,
-                num_steps: 4, // Fast generation with flux-1-schnell
-            }),
-        }
-    );
+  // Use Gemini for image generation
+  const response = await genai.models.generateContent({
+    model: GEMINI_MODELS.IMAGE_GENERATION,
+    contents: prompt,
+    config: {
+      responseModalities: [Modality.TEXT, Modality.IMAGE],
+    },
+  });
 
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Cloudflare AI error: ${response.statusText} - ${errorText}`);
+  // Extract image from response
+  if (response.candidates && response.candidates[0]?.content?.parts) {
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        // Return as base64 data URL
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
     }
+  }
 
-    // Cloudflare returns the image as binary data directly
-    const blob = await response.blob();
-    const arrayBuffer = await blob.arrayBuffer();
-    const base64Image = Buffer.from(arrayBuffer).toString("base64");
-    
-    return `data:image/png;base64,${base64Image}`;
+  throw new Error("No image generated");
 }

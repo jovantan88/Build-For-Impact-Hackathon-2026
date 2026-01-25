@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { DiscoverResult } from "@/types";
+import OpenAI from "openai";
+import { OPENAI_MODELS } from "@/lib/ai/models";
 
-const RUNPOD_API_KEY = process.env.RUNPOD_API_KEY;
-const RUNPOD_ENDPOINT_ID = process.env.RUNPOD_ENDPOINT_ID;
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-interface RunPodResponse {
+interface DishAnalysisResponse {
   dish: {
     name: string;
     description: string;
@@ -22,37 +25,73 @@ interface RunPodResponse {
   error?: string;
 }
 
-async function callRunPodEndpoint(image: string): Promise<RunPodResponse> {
-  if (!RUNPOD_API_KEY || !RUNPOD_ENDPOINT_ID) {
-    throw new Error("RunPod credentials not configured");
-  }
+async function analyzeDishWithGPT(
+  image: string,
+): Promise<DishAnalysisResponse> {
+  const response = await openai.chat.completions.create({
+    model: OPENAI_MODELS.GPT_5_MINI,
+    messages: [
+      {
+        role: "system",
+        content: `You are an expert chef and food analyst. When shown an image of a dish, you identify it and provide:
+1. The dish name and a brief description
+2. The cuisines it belongs to
+3. A complete list of ingredients with estimated quantities
+4. A full recipe with preparation time, cook time, servings, step-by-step instructions, and cooking tips
 
-  const response = await fetch(
-    `https://api.runpod.ai/v2/${RUNPOD_ENDPOINT_ID}/runsync`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${RUNPOD_API_KEY}`,
+Focus on Southeast Asian cuisine but handle any dish you see.
+
+Return your response as valid JSON with this exact structure:
+{
+  "dish": {
+    "name": "string - the dish name",
+    "description": "string - a brief appetizing description",
+    "cuisine": ["array", "of", "cuisine", "types"]
+  },
+  "ingredients": [
+    { "name": "ingredient name", "quantity": "amount with unit (e.g., '2 cups', '500g')" }
+  ],
+  "recipe": {
+    "prepTime": "e.g., '15 mins'",
+    "cookTime": "e.g., '30 mins'",
+    "servings": 4,
+    "instructions": [
+      "Step 1: ...",
+      "Step 2: ...",
+      "Step 3: ..."
+    ],
+    "tips": "Optional cooking tips and variations"
+  }
+}`,
       },
-      body: JSON.stringify({
-        input: { image },
-      }),
-    }
-  );
+      {
+        role: "user",
+        content: [
+          {
+            type: "image_url",
+            image_url: {
+              url: image.startsWith("data:")
+                ? image
+                : `data:image/jpeg;base64,${image}`,
+            },
+          },
+          {
+            type: "text",
+            text: "Analyze this dish and provide the full recipe. Return only valid JSON.",
+          },
+        ],
+      },
+    ],
+    max_completion_tokens: 4000,
+    response_format: { type: "json_object" },
+  });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`RunPod API error: ${response.status} - ${errorText}`);
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error("No response from AI");
   }
 
-  const result = await response.json();
-
-  if (result.status === "FAILED") {
-    throw new Error(result.error || "RunPod job failed");
-  }
-
-  return result.output;
+  return JSON.parse(content);
 }
 
 function normalizeIngredientName(name: string): string {
@@ -62,7 +101,7 @@ function normalizeIngredientName(name: string): string {
 function compareIngredients(
   requiredIngredients: { name: string; quantity?: string }[],
   userIngredients: string[],
-  pantryStaples: string[]
+  pantryStaples: string[],
 ): {
   all: { name: string; quantity?: string; available: boolean }[];
   have: string[];
@@ -83,7 +122,7 @@ function compareIngredients(
     const isAvailable = Array.from(availableSet).some(
       (available) =>
         available.includes(normalizedName) ||
-        normalizedName.includes(available)
+        normalizedName.includes(available),
     );
 
     all.push({
@@ -116,19 +155,16 @@ export async function POST(request: NextRequest) {
     const { image } = await request.json();
 
     if (!image) {
-      return NextResponse.json(
-        { error: "No image provided" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "No image provided" }, { status: 400 });
     }
 
-    // Call RunPod endpoint to analyze the dish
-    const runpodResult = await callRunPodEndpoint(image);
+    // Analyze the dish using GPT-5-mini with vision
+    const analysisResult = await analyzeDishWithGPT(image);
 
-    if (runpodResult.error) {
+    if (analysisResult.error) {
       return NextResponse.json(
-        { error: runpodResult.error },
-        { status: 500 }
+        { error: analysisResult.error },
+        { status: 500 },
       );
     }
 
@@ -155,15 +191,15 @@ export async function POST(request: NextRequest) {
 
     // Compare ingredients
     const comparedIngredients = compareIngredients(
-      runpodResult.ingredients || [],
+      analysisResult.ingredients || [],
       userIngredientNames,
-      stapleNames
+      stapleNames,
     );
 
     const result: DiscoverResult = {
-      dish: runpodResult.dish,
+      dish: analysisResult.dish,
       ingredients: comparedIngredients,
-      recipe: runpodResult.recipe,
+      recipe: analysisResult.recipe,
     };
 
     return NextResponse.json(result);
@@ -174,7 +210,7 @@ export async function POST(request: NextRequest) {
         error:
           error instanceof Error ? error.message : "Failed to analyze dish",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
