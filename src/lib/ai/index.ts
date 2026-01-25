@@ -1,6 +1,14 @@
 import OpenAI from "openai";
 import { GoogleGenAI, Modality } from "@google/genai";
 import { OPENAI_MODELS, GEMINI_MODELS } from "./models";
+import {
+  RECEIPT_EXTRACTION_SYSTEM_PROMPT,
+  RECEIPT_EXTRACTION_USER_PROMPT,
+  EXPIRY_CLASSIFICATION_SYSTEM_PROMPT,
+  createExpiryClassificationUserPrompt,
+  createIngredientImagePrompt,
+  createFoodImagePrompt,
+} from "./prompts";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -24,28 +32,7 @@ export async function extractReceiptItems(
     messages: [
       {
         role: "system",
-        content: `You are an expert at reading grocery receipts and extracting items.
-Your task is to:
-1. Extract all items from the receipt
-2. Identify the quantity and unit if visible
-3. Classify each item as either an ingredient (food that can be used in cooking) or non-ingredient (chips, soda, cleaning supplies, toiletries, etc.)
-
-Return a JSON array of items with this structure:
-{
-  "items": [
-    {
-      "name": "string - cleaned up item name",
-      "quantity": number or null,
-      "unit": "string or null (kg, g, pcs, pack, bottle, can, etc.)",
-      "isIngredient": boolean,
-      "category": "string - produce/meat/dairy/pantry/beverage/snack/household/other"
-    }
-  ]
-}
-
-Focus on Southeast Asian grocery items but handle any items you see.
-Clean up abbreviated names to full readable names.
-If quantity isn't clear, leave it null.`,
+        content: RECEIPT_EXTRACTION_SYSTEM_PROMPT,
       },
       {
         role: "user",
@@ -58,7 +45,7 @@ If quantity isn't clear, leave it null.`,
           },
           {
             type: "text",
-            text: "Extract all items from this receipt. Return only valid JSON.",
+            text: RECEIPT_EXTRACTION_USER_PROMPT,
           },
         ],
       },
@@ -84,33 +71,11 @@ export async function classifyExpiryItems(
     messages: [
       {
         role: "system",
-        content: `You classify grocery items by whether they typically expire quickly and need expiry date tracking.
-
-Items that need expiry tracking (return true):
-- Fresh produce (vegetables, fruits, herbs)
-- Dairy products (milk, yogurt, cheese, butter)
-- Meat and seafood
-- Bread and baked goods
-- Eggs
-- Tofu, tempeh
-- Fresh noodles
-- Deli items
-
-Items that DON'T need expiry tracking (return false):
-- Canned goods
-- Dried goods (rice, pasta, beans)
-- Oils and vinegars
-- Spices and seasonings
-- Sauces in bottles
-- Frozen items
-- Sugar, salt
-- Coffee, tea
-
-Return JSON: { "items": [{ "name": "item name", "needsExpiry": boolean }] }`,
+        content: EXPIRY_CLASSIFICATION_SYSTEM_PROMPT,
       },
       {
         role: "user",
-        content: `Classify these items: ${JSON.stringify(items)}`,
+        content: createExpiryClassificationUserPrompt(items),
       },
     ],
     response_format: { type: "json_object" },
@@ -131,15 +96,7 @@ export async function generateIngredientImage(
   // Use Gemini for image generation
   const response = await genai.models.generateContent({
     model: GEMINI_MODELS.IMAGE_GENERATION,
-    contents: `Generate a clean, appetizing photograph of ${ingredientName} (ingredient).
-The image should be:
-- On a clean white or light background
-- Food photography style
-- High quality and realistic
-- In packaging
-- Centered composition
-- Well-lit and appetizing
-- Square orientation (1:1 aspect ratio)`,
+    contents: createIngredientImagePrompt(ingredientName),
     config: {
       responseModalities: [Modality.TEXT, Modality.IMAGE],
     },
@@ -162,10 +119,7 @@ export async function generateFoodImage(
   dishName: string,
   cuisineStyle: string[] = [],
 ): Promise<string> {
-  const cuisineDesc =
-    cuisineStyle.length > 0 ? cuisineStyle.join(", ") : "Southeast Asian";
-
-  const prompt = `A beautiful, appetizing professional photograph of ${dishName}, a ${cuisineDesc} dish. Professional food photography style, served on an appropriate plate or bowl, beautifully garnished, warm inviting lighting, shallow depth of field, top-down or 45-degree angle view, high resolution and realistic, makes the viewer hungry. Food must be in the middle of the frame.`;
+  const prompt = createFoodImagePrompt(dishName, cuisineStyle);
 
   // Use Gemini for image generation
   const response = await genai.models.generateContent({
