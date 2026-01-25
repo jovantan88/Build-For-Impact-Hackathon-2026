@@ -160,3 +160,23 @@ export const DEFAULT_PANTRY_STAPLES = [
   "Coriander",
   "Lemongrass",
 ];
+
+export interface DiscoverResult {
+  dish: {
+    name: string;
+    description: string;
+    cuisine: string[];
+  };
+  ingredients: {
+    all: { name: string; quantity?: string; available: boolean }[];
+    have: string[];
+    missing: string[];
+  };
+  recipe: {
+    prepTime?: string;
+    cookTime?: string;
+    servings?: number;
+    instructions: string[];
+    tips?: string;
+  };
+}
