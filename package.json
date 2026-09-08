@@ -2,6 +2,8 @@
     "name": "eatla",
     "version": "0.1.0",
     "private": true,
+    "description": "AI fridge companion for Southeast Asian kitchens. Finalist at the 2026 Build for Impact Hackathon.",
+    "license": "MIT",
     "scripts": {
         "dev": "next dev",
         "build": "next build",

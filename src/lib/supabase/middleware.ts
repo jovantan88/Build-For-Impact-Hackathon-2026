@@ -40,6 +40,8 @@ export async function updateSession(request: NextRequest) {
     "/expiry",
     "/fridge",
     "/recipes",
+    "/discover",
+    "/insights",
   ];
   const isProtectedPath = protectedPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path),

@@ -46,11 +46,11 @@ interface StreamEvent {
 }
 
 const recommendationColors = {
-    reduce: "bg-blue-100 text-blue-800 border-blue-200",
-    skip: "bg-orange-100 text-orange-800 border-orange-200",
-    substitute: "bg-purple-100 text-purple-800 border-purple-200",
-    freeze: "bg-cyan-100 text-cyan-800 border-cyan-200",
-    buy_less: "bg-yellow-100 text-yellow-800 border-yellow-200",
+    reduce: "bg-blue-500/15 text-blue-300 border border-blue-500/20",
+    skip: "bg-orange-500/15 text-orange-300 border border-orange-500/20",
+    substitute: "bg-purple-500/15 text-purple-300 border border-purple-500/20",
+    freeze: "bg-cyan-500/15 text-cyan-300 border border-cyan-500/20",
+    buy_less: "bg-yellow-500/15 text-yellow-300 border border-yellow-500/20",
 };
 
 const recommendationIcons = {

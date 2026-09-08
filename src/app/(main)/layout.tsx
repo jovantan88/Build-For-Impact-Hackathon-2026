@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { LogoutButton } from "@/components/logout-button";
 import { BottomNav } from "@/components/bottom-nav";
+import { BrandMark } from "@/components/brand-mark";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
     return (
@@ -8,9 +8,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             {/* Header */}
             <header className="bg-card border-b border-border sticky top-0 z-50 backdrop-blur-sm bg-card/80">
                 <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
-                    <Link href="/fridge" className="text-2xl font-medium text-white font-heading">
-                        EatLa!
-                    </Link>
+                    <BrandMark href="/fridge" className="text-2xl" />
                     <LogoutButton />
                 </div>
             </header>

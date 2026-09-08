@@ -1,15 +1,25 @@
 import { redirect } from "next/navigation";
+import { LandingPage } from "@/components/landing-page";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function Home() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
-  if (user) {
-    redirect("/fridge");
-  } else {
-    redirect("/login");
-  }
+    if (supabaseUrl && supabaseKey) {
+        try {
+            const supabase = await createClient();
+            const {
+                data: { user },
+            } = await supabase.auth.getUser();
+
+            if (user) {
+                redirect("/fridge");
+            }
+        } catch {
+            // Show the public landing page when auth is unavailable.
+        }
+    }
+
+    return <LandingPage />;
 }

@@ -1,7 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { AuthForm } from "@/components/auth-form";
+import { AuthShell } from "@/components/auth-shell";
 import { signup } from "../actions";
+
+export const metadata: Metadata = {
+    title: "Create account",
+};
 
 const signupFields = [
     { name: "email", label: "Email", type: "email", placeholder: "you@example.com" },
@@ -16,24 +21,21 @@ async function signupAction(_prevState: { error: string | null }, formData: Form
 
 export default function SignupPage() {
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-4">
-            <Card className="w-full max-w-md">
-                <CardHeader className="text-center">
-                    <CardTitle className="text-2xl font-bold text-primary">Create Account</CardTitle>
-                    <CardDescription>Start managing your groceries smarter</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <AuthForm action={signupAction} submitLabel="Create Account" loadingLabel="Creating account..." fields={signupFields} />
-                </CardContent>
-                <CardFooter className="justify-center">
-                    <p className="text-sm text-muted-foreground">
-                        Already have an account?{" "}
-                        <Link href="/login" className="text-primary hover:underline">
-                            Sign in
-                        </Link>
-                    </p>
-                </CardFooter>
-            </Card>
-        </div>
+        <AuthShell
+            title="Create your account"
+            description="Start managing groceries the way a SEA kitchen actually works"
+            imageTitle="Your next meal is already in the fridge"
+            imageSubtitle="Scan a receipt. EatLa keeps the rest honest."
+            footer={
+                <p className="text-sm text-muted-foreground">
+                    Already have an account?{" "}
+                    <Link href="/login" className="text-primary hover:underline">
+                        Sign in
+                    </Link>
+                </p>
+            }
+        >
+            <AuthForm action={signupAction} submitLabel="Create Account" loadingLabel="Creating account..." fields={signupFields} />
+        </AuthShell>
     );
 }

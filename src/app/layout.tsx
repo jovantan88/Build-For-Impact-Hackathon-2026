@@ -16,8 +16,25 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-    title: "EatLa - Smart Grocery Management",
-    description: "Turn your receipts into recipes with AI-powered ingredient tracking",
+    title: {
+        default: "EatLa — Cook smarter, waste less",
+        template: "%s · EatLa",
+    },
+    description:
+        "AI fridge companion for Southeast Asian kitchens. Scan receipts, track expiry, and cook with SEA-LION. Finalist at the 2026 Build for Impact Hackathon.",
+    keywords: ["EatLa", "food waste", "SEA-LION", "Southeast Asian recipes", "Build for Impact", "hackathon"],
+    openGraph: {
+        title: "EatLa — Cook smarter, waste less",
+        description:
+            "Scan a grocery receipt, track what you have, and let SEA-LION turn leftovers into dinner. Finalist at Build for Impact 2026.",
+        type: "website",
+        locale: "en_SG",
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: "EatLa — Cook smarter, waste less",
+        description: "AI fridge companion for Southeast Asian kitchens. Finalist at Build for Impact 2026.",
+    },
 };
 
 export default function RootLayout({
